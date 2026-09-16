@@ -83,6 +83,10 @@ bun install && bash setup.sh --seed
 # Start frontend (port 3000) and backend (port 8000)
 bun start
 ```
+Once started, open your browser at:
+
+- **App:** http://localhost:3000
+- **API:** http://localhost:8000/api/v1/health
 
 ## Command reference
 
