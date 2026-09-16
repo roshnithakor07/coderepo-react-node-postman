@@ -1,6 +1,6 @@
 ## [2026-09-16T10:00:00+05:30] ONBOARDING COMPLETE
 
-AGREEMENT RECORDED: /home/user/coderepo-react-node-postman
+AGREEMENT RECORDED: /home/imroshni/hackerrank-project/coderepo-react-node-postman
 Agent: Claude (claude.ai chat)
 Stack: node
 System Time: 2026-09-16T10:00:00+05:30
@@ -10,7 +10,7 @@ System Time: 2026-09-16T10:00:00+05:30
 ## [2026-09-16T10:01:00+05:30] SESSION START
 
 Agent: Claude (claude.ai chat)
-Repo Root: /home/user/coderepo-react-node-postman
+Repo Root: /home/imroshni/hackerrank-project/coderepo-react-node-postman
 Branch: main
 Worktree: main
 Parent Agent: none
@@ -33,7 +33,7 @@ Actions:
 Context:
 tool=Claude (claude.ai chat)
 branch=main
-repo_root=/home/user/coderepo-react-node-postman
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
 worktree=main
 parent_agent=none
 
@@ -56,7 +56,7 @@ Actions:
 Context:
 tool=Claude (claude.ai chat)
 branch=main
-repo_root=/home/user/coderepo-react-node-postman
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
 worktree=main
 parent_agent=none
 
@@ -84,7 +84,7 @@ Actions:
 Context:
 tool=Claude (claude.ai chat)
 branch=main
-repo_root=/home/user/coderepo-react-node-postman
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
 worktree=main
 parent_agent=none
 
@@ -115,7 +115,7 @@ Actions:
 Context:
 tool=Claude (claude.ai chat)
 branch=main
-repo_root=/home/user/coderepo-react-node-postman
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
 worktree=main
 parent_agent=none
 
@@ -140,7 +140,6 @@ Actions:
 Context:
 tool=Claude (claude.ai chat)
 branch=main
-repo_root=/home/user/coderepo-react-node-postman
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
 worktree=main
 parent_agent=none
-
