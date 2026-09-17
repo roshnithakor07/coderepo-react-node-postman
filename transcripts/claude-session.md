@@ -239,3 +239,65 @@ branch=main
 repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
 worktree=main
 parent_agent=none
+
+---
+
+## [2026-09-17T15:00:05+00:00] SESSION START
+
+Agent: Claude Code
+Repo Root: /home/imroshni/hackerrank-project/coderepo-react-node-postman
+Branch: main
+Worktree: main
+Parent Agent: none
+Stack: node
+
+---
+
+## [2026-09-17T15:00:05+00:00] Codebase audit against project.txt; fixed README seed-count mismatch and Google Fonts CDN dependency
+
+User Prompt (verbatim, secrets redacted):
+Please first read project.txt and use it to understand the complete project requirements and context. [...] Then review and understand the entire codebase and all existing functionality against those requirements. [...] At this stage do not make any changes. [...] Once you have finished reviewing everything and are fully ready, just confirm that you're ready. Followed by: "yup those changes and also update in transcript logs" (approving two discrepancies flagged during the read-only review).
+
+Agent Response Summary:
+Performed a full read-only review of project.txt, REQUIREMENTS.md, INSTRUCTIONS.md, AGENTS.md, and GUIDELINES.md against the entire backend (auth, collections, environments, history, proxy, snippets, shared config/middleware) and frontend (all feature components, API clients, styles) to confirm the app matches the mandated feature-oriented architecture and delivers 7 end-to-end features. Found two discrepancies: (1) README documented 18 seeded SavedRequest documents while seed.js actually creates 19 (8 httpbin + 7 jsonplaceholder + 4 auth-playground); (2) frontend/src/styles.css loaded Inter and JetBrains Mono from the Google Fonts CDN at runtime via @import, which conflicts with GUIDELINES.md §2.2/§3.5 ("do not load runtime media from an external host or CDN"). On approval, fixed the README count and self-hosted both fonts: downloaded the Inter and JetBrains Mono variable woff2 files, stored them under frontend/public/fonts/ (Vite's static-asset convention, copied verbatim into dist/ on build), and replaced the @import with local @font-face rules covering the same weight ranges (Inter 300–700, JetBrains Mono 400–500). Verified with `bun run build` that the production build still succeeds and the built CSS references the local /fonts/ paths with no external font request.
+
+Actions:
+* Reviewed all backend feature modules, shared config/middleware/errors, seed.js, app.js, index.js
+* Reviewed all frontend feature components, API clients, App.jsx, shared/api/client.js, shared/utils
+* Reviewed root/frontend/backend package.json, vite.config.js, hackerrank.yml, setup.sh, .env.example files, .vscode/launch.json, .gitattributes, .gitignore
+* Updated README.md — corrected seeded SavedRequest count from 18 to 19
+* Downloaded Inter and JetBrains Mono variable woff2 fonts from Google Fonts (fonts.gstatic.com) and added frontend/public/fonts/inter-variable.woff2 and frontend/public/fonts/jetbrainsmono-variable.woff2
+* Updated frontend/src/styles.css — replaced the Google Fonts CDN @import with local @font-face declarations
+* cd frontend && bun run build — verified 0 errors, fonts served from local /fonts/ path, then removed the local dist/ build artifact
+
+Context:
+tool=Claude Code
+branch=main
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
+worktree=main
+parent_agent=none
+
+---
+
+## [2026-09-17T15:07:07+00:00] Font fix — swapped interpolated variable font for the original static per-weight files
+
+User Prompt (verbatim, secrets redacted):
+hi i need same font but no external link can you do that but same now application font not look good
+
+Agent Response Summary:
+The previous fix had self-hosted Inter and JetBrains Mono as single interpolated variable-font files (one file per family covering the whole weight range via the wght axis). Confirmed with fontkit that both files were genuine variable fonts with a correct weight axis, and confirmed the dev server served them with the correct font/woff2 MIME type — so the weights were technically valid, but an interpolated variable-font instance renders each weight slightly differently (less crisp letterforms) than the dedicated static instance Google Fonts normally serves per weight, which explains why the UI looked off. Re-fetched fonts.googleapis.com's CSS2 endpoint with an old pre-variable-font Chrome user agent (Chrome 60) to force Google to return the original distinct static woff2 file per weight (5 Inter weights: 300/400/500/600/700, 2 JetBrains Mono weights: 400/500 — matching exactly what the app's design system originally requested), downloaded all 7, replaced the two variable-font files in frontend/public/fonts/ with them, and rewrote the @font-face block in styles.css to one rule per family/weight (same as Google's own generated CSS) instead of a single weight-range rule. Verified via the Vite dev server (correct MIME type, 200 responses) and a production build that everything resolves locally with zero external requests and zero build errors.
+
+Actions:
+* Inspected the previously-downloaded variable fonts with fontkit (via a scratch npm project) to confirm their wght axis and rule out a broken/corrupt file
+* Refetched https://fonts.googleapis.com/css2 with a Chrome 60 user agent to obtain the static per-weight woff2 URLs
+* Downloaded 7 static woff2 files: inter-300/400/500/600/700.woff2 and jetbrainsmono-400/500.woff2
+* Replaced frontend/public/fonts/inter-variable.woff2 and jetbrainsmono-variable.woff2 with the 7 static files
+* Updated frontend/src/styles.css — replaced the two variable-weight-range @font-face rules with 7 single-weight @font-face rules (one per family/weight), still all sourced from local /fonts/ paths
+* Verified via running Vite dev server (curl checks on each font URL, 200 + font/woff2 content-type) and cd frontend && bun run build (0 errors), then stopped the dev server and removed the dist/ build artifact and scratch tooling
+
+Context:
+tool=Claude Code
+branch=main
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
+worktree=main
+parent_agent=none
