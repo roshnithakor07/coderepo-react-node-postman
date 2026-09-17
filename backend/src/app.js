@@ -6,6 +6,7 @@ import { collectionRouter, savedRequestRouter } from "./features/collections/col
 import { environmentRouter } from "./features/environments/environment.routes.js";
 import { historyRouter } from "./features/history/history.routes.js";
 import { proxyRouter } from "./features/proxy/proxy.routes.js";
+import { sandboxRouter } from "./features/sandbox/sandbox.routes.js";
 import { snippetRouter } from "./features/snippets/snippet.routes.js";
 import { requireAuth } from "./shared/middleware/auth.js";
 import { errorHandler, notFoundHandler } from "./shared/middleware/error-handler.js";
@@ -22,6 +23,7 @@ export function createApp() {
 	});
 
 	app.use("/api/v1/auth", authRouter);
+	app.use("/api/v1/sandbox", sandboxRouter);
 
 	app.use("/api/v1", requireAuth);
 	app.use("/api/v1/proxy", proxyRouter);

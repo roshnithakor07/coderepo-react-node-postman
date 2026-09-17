@@ -47,34 +47,14 @@ seed_database() {
     bun run seed
 }
 
-db_has_data() {
-    # Use mongosh if available, otherwise mongocli, otherwise assume needs seed
-    if command -v mongosh >/dev/null 2>&1; then
-        COUNT=$(mongosh --quiet --eval "db.getSiblingDB('postman_db').workspaceaccounts.countDocuments()" 2>/dev/null || echo "0")
-    elif command -v mongo >/dev/null 2>&1; then
-        COUNT=$(mongo --quiet --eval "db.getSiblingDB('postman_db').workspaceaccounts.countDocuments()" 2>/dev/null || echo "0")
-    else
-        COUNT="0"
-    fi
-    [ "$COUNT" -gt "0" ] 2>/dev/null
-}
-
 setup_env
 check_mongo
 
 case "$MODE" in
-    # --seed: always wipe and re-seed (clean reset)
-    --seed)
+    # --seed and --start both always wipe and re-seed to the documented baseline —
+    # every application start resets the database (see README's MongoDB behavior section).
+    --seed|--start|"")
         seed_database
-        ;;
-    # --start (prestart hook): only seed if DB is empty
-    --start|"")
-        if db_has_data; then
-            log_info "Database already has data — skipping seed (run 'bun run seed' to reset)"
-        else
-            log_info "Database is empty — seeding now"
-            seed_database
-        fi
         ;;
     *)
         log_error "Unknown setup mode: $MODE"

@@ -302,12 +302,22 @@ export default function App() {
 	const [bootstrapping, setBootstrapping] = useState(true);
 	const [authLoading, setAuthLoading] = useState(false);
 	const [authError, setAuthError] = useState("");
+	const accountRef = useRef(null);
+
+	useEffect(() => {
+		accountRef.current = account;
+	}, [account]);
 
 	useEffect(() => {
 		const expire = (event) => {
+			// A stale or invalidated token found on page load (e.g. after the demo
+			// database is reset) is not a "session expired" event the person needs to
+			// see — they were never shown as signed in this visit. Only surface the
+			// message when it interrupts an account that was actually in use.
+			const wasSignedIn = Boolean(accountRef.current);
 			setSessionToken("");
 			setAccount(null);
-			setAuthError(event.detail || "Your session has expired. Please sign in again.");
+			if (wasSignedIn) setAuthError(event.detail || "Your session has expired. Please sign in again.");
 		};
 		window.addEventListener("postman-session-expired", expire);
 		return () => window.removeEventListener("postman-session-expired", expire);

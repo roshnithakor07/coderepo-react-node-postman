@@ -301,3 +301,65 @@ branch=main
 repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
 worktree=main
 parent_agent=none
+
+---
+
+## [2026-09-17T15:29:54+00:00] End-to-end review per revised project.txt — removed external dependency, fixed auth-substitution bug, fixed seed-on-start bug
+
+User Prompt (verbatim, secrets redacted):
+now read project.txt make sure you keep ui better and follow all rule
+
+Agent Response Summary:
+project.txt had been rewritten by the user into a full pre-submission review brief: verify business logic against requirements before changing anything, remove any external HTTPS/API dependency the app relies on automatically (explicitly naming httpbin.org as an example), and do a complete functionality/UI/architecture/quality/production-readiness pass, fixing real issues rather than just reporting them. Grepped the whole repo for external hosts and found exactly one violation: backend/src/scripts/seed.js's built-in example collections, the Development environment's baseUrl, and all 5 seeded history entries pointed at httpbin.org and jsonplaceholder.typicode.com. Built a new backend/src/features/sandbox feature (public, unauthenticated router mounted at /api/v1/sandbox before the requireAuth gate, since it plays the role of "an external API" the same way httpbin.org did, not a product capability of the app) that echoes method/headers/query/body, returns a chosen status code, sets custom response headers, delays a response, checks bearer/basic auth, and serves a small fixture-backed posts/comments/users REST resource. Rewrote seed.js so every seeded request, the Development environment's baseUrl, and all history entries point at the local sandbox instead, keeping the demo fully functional with zero internet access.
+
+While manually exercising the proxy end to end (curl smoke tests through /api/v1/proxy) to verify business logic rather than assume it worked, found two real pre-existing bugs: (1) auth.token/username/password/apiKeyValue were never run through {{variable}} substitution in proxy.service.js, so the seeded "Bearer token auth" and "API key" demo requests silently sent the literal string "{{apiKey}}" instead of its resolved value, contradicting the Auth tab's own placeholder text ("Enter token or {{variable}}"); (2) the same substitution was missing for the request body and had a divergent, slightly-wrong auth implementation in snippet.service.js (it would render an API-key header/query param even with an empty value, where the proxy correctly omitted it), so generated code snippets could show something different from what the app actually sends — contradicting README's explicit "live environment variable substitution" claim for snippets. Fixed the root cause once: extracted substituteVariables/substituteAuth/buildAuthHeaders/buildAuthHeaderParam/buildAuthQueryParam into backend/src/shared/utils/request-transform.js and had both proxy.service.js and snippet.service.js import the same functions, so the two can no longer drift apart. This also made the design-decisions doc's existing (previously inaccurate) claim that proxy and snippets "share the same substituteVariables() function" actually true.
+
+Also ran the exact hackerrank.yml-declared install/run commands end to end (bash setup.sh --seed, then bun start) to verify production readiness, and found that setup.sh's --start mode (the prestart hook bun start runs on every launch) skipped reseeding whenever the database already had data — directly contradicting GUIDELINES.md §1.3 ("Starting the complete application resets the application database to the documented seeded baseline... A restart must remove ad hoc validation data") and the README's own documented behavior ("Every time the app starts, it resets the database to the seeded baseline"). Simplified setup.sh so --seed, --start, and the default mode all unconditionally reseed, removing the now-dead db_has_data() mongosh/mongo detection logic entirely.
+
+Verified everything end to end via curl against a running instance: login, collection/request CRUD (create, rename, add request, cascade-delete), environment CRUD (create, activate, delete), auth substitution across bearer/basic/apikey (confirmed {{apiKey}} now resolves correctly against all three), snippet generation reflecting the same resolved values, unauthenticated requests correctly 401, unknown authenticated routes correctly 404, Zod validation errors returning structured 400s, wrong-password login returning 401 with no stack trace leakage. Re-ran bash setup.sh --seed to restore a clean baseline afterward. Ran bun run build in frontend (0 errors) and confirmed bun start boots both servers on the correct ports with MongoDB connected. No UI/CSS files were touched in this pass — the design system from the prior font-fix session is unchanged.
+
+Actions:
+* Added backend/src/features/sandbox/{sandbox.routes.js,sandbox.controller.js,sandbox.fixtures.js} — local, unauthenticated HTTP test target replacing httpbin.org/jsonplaceholder.typicode.com
+* Updated backend/src/app.js — mounted sandboxRouter publicly, before the requireAuth gate
+* Added backend/src/shared/utils/request-transform.js — substituteVariables, substituteAuth, buildAuthHeaders, buildAuthHeaderParam, buildAuthQueryParam, shared by proxy and snippets
+* Updated backend/src/features/proxy/proxy.service.js — removed duplicated helpers in favor of the shared module; fixed auth field substitution ({{variable}} now resolves inside token/username/password/apiKeyValue)
+* Updated backend/src/features/snippets/snippet.service.js — removed duplicated/divergent helpers in favor of the shared module; fixed missing auth substitution and missing body substitution
+* Rewrote backend/src/scripts/seed.js — environment baseUrl, all sandbox-collection and REST-demo request URLs, and all 5 history entries now point at the local sandbox instead of httpbin.org/jsonplaceholder.typicode.com; renamed collections/variables accordingly (httpbin/jsonplaceholder → sandboxHttp/sandboxRest)
+* Updated setup.sh — --seed, --start, and default mode now all unconditionally reseed (removed the skip-if-data-exists optimization that contradicted GUIDELINES.md §1.3 and the README's documented reset-on-start behavior)
+* Updated README.md — project structure tree now lists the sandbox feature folder and the new shared/utils folder
+* Updated transcripts/02-design-decisions.md — corrected HTTPBin/JSONPlaceholder references, added a "Local Sandbox Instead of a Third-Party API" section, corrected the snippet-generation and auth-support sections to describe the now-true shared-module and variable-substitution behavior
+* bash setup.sh --seed — re-seeded and verified counts (2 accounts, 4 collections, 19 requests, 4 environments, 5 history)
+* Ran cd backend && bun run dev, then exercised the running API directly with curl: login, proxy calls against every sandbox endpoint (get/post/status/bearer/basic-auth/posts), snippet generation, collection/environment CRUD, unauthenticated/unknown-route/validation/bad-login error paths
+* bash setup.sh --start — verified it now always reseeds instead of conditionally skipping
+* cd frontend && bun run build — 0 errors; removed the dist/ build artifact afterward
+* Stopped all background dev processes and scratch tooling (fontcheck npm project, temp font downloads) before finishing
+
+Context:
+tool=Claude Code
+branch=main
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
+worktree=main
+parent_agent=none
+
+---
+
+## [2026-09-17T15:41:14+00:00] Startup timing question, then fixed a false "workspace no longer available" error on fresh page loads
+
+User Prompt (verbatim, secrets redacted):
+"application take time to load why" then, after being shown a timing breakdown and asked whether to keep/speed up/skip the always-reseed startup behavior, chose to keep it as-is. Then: "when i start app bun start and load page login page ui changes also error This Postman workspace is no longer available. so improve consistent ui there for login"
+
+Agent Response Summary:
+For the timing question, measured each phase directly: bash setup.sh --seed ~1.7s, backend boot ~0.1-0.3s, Vite ready ~0.6s, so ~2-2.5s total before both servers are reachable, plus a near-instant first paint. Explained the ~1.7s reseed is the direct, deliberate cost of the setup.sh fix made earlier this session (GUIDELINES.md requires every start to reset to baseline). Asked whether to keep it, speed up the seed script, or make it conditional again for local dev only; the user chose to keep always-reseed as-is, so no code change was needed there.
+
+For the login-page report, traced it to a real interaction between two things introduced this session: because bun start now always reseeds, every account gets a brand-new MongoDB _id on every restart, so any session token left in the browser's localStorage from a previous run is permanently stale. On the very next page load, App.jsx's silent session-restore check (useEffect calling authApi.session() with the stale token) gets a 401 ACCOUNT_UNAVAILABLE from the backend, which the shared API client turns into a "postman-session-expired" window event — and the App root's listener for that event set authError unconditionally, so the login page rendered with the "This Postman workspace is no longer available." banner already visible before the person had done anything, and the banner's appearance was the "UI changes" being described (it grows the login card / shifts layout). Confirmed via styles.css that .app-boot and .login-page already share the same background and centering, so there was no actual CSS inconsistency to fix — the fix belonged in business logic, not styling. Changed the event listener to only surface that error message when an account was actually signed in and in use at the moment the event fires (tracked via a ref synced to the account state); a stale/invalid token found during the initial silent restore now just clears quietly and shows a clean login screen with no error, while a token that goes bad mid-session (the scenario the message is actually about) still shows it.
+
+Actions:
+* Updated frontend/src/App.jsx — added an accountRef synced to the account state; the postman-session-expired listener now only calls setAuthError when accountRef.current was truthy (an active session was actually interrupted), not on every stale-token rejection encountered during the silent initial restore check
+* cd frontend && bun run build — 0 errors; removed the dist/ build artifact afterward
+
+Context:
+tool=Claude Code
+branch=main
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
+worktree=main
+parent_agent=none

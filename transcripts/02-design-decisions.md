@@ -43,7 +43,7 @@ Each `SavedRequest` has a `collectionId` foreign key and an `accountId` for secu
 
 ## Authentication Support: Four Types
 
-The auth panel supports four types: none, bearer token, basic auth, and API key (in header or query param). Implementation detail: all four types are stored as a single `auth` subdocument on the `SavedRequest` model. At proxy time, `buildAuthHeaders()` and `buildAuthQueryParam()` read the `type` field and construct the appropriate headers or query params. Adding a new auth type only requires extending these two functions — no schema migration needed.
+The auth panel supports four types: none, bearer token, basic auth, and API key (in header or query param). Implementation detail: all four types are stored as a single `auth` subdocument on the `SavedRequest` model. At proxy time, `buildAuthHeaders()` and `buildAuthQueryParam()` read the `type` field and construct the appropriate headers or query params. Adding a new auth type only requires extending these two functions — no schema migration needed. Auth field values (`token`, `username`, `password`, `apiKeyValue`) go through the same `{{variable}}` substitution as the URL, headers, and params before the request is sent, so a bearer token stored as `{{apiKey}}` resolves against the active environment at send time, matching the placeholder text in the Auth tab's UI.
 
 ## Request History: Auto-Log, No User Action
 
@@ -51,7 +51,7 @@ History is logged automatically on every proxy call — success and failure both
 
 ## Code Snippet Generation: Server-Side
 
-The snippet generator runs on the backend (`/api/v1/snippets`) rather than in the frontend. This keeps the environment variable substitution logic in one place — the same `substituteVariables()` function used by the proxy is called before generating the snippet, so the snippet reflects the actual values that would be sent.
+The snippet generator runs on the backend (`/api/v1/snippets`) rather than in the frontend. This keeps the environment variable substitution logic in one place — `substituteVariables()`, `substituteAuth()`, and the `buildAuthHeaders`/`buildAuthHeaderParam`/`buildAuthQueryParam` helpers live in `backend/src/shared/utils/request-transform.js` and are imported by both the proxy service and the snippet service, so the snippet reflects the exact values, including resolved auth fields and body, that would actually be sent. These started out as separate copies in each service; consolidating them into one shared module was a direct fix for two bugs that copy had introduced — an API key with an empty value showed up in generated snippets even though the proxy correctly omitted it, and the snippet body never ran through variable substitution at all.
 
 Four languages are supported: `curl`, `fetch` (modern browser/Node.js), `axios` (most common Node.js HTTP client), and `python` (requests library). These cover the vast majority of real-world API client use cases.
 
@@ -73,9 +73,13 @@ The request builder and response viewer are separated by a draggable splitter. I
 
 The seed creates realistic, immediately usable data:
 
-- **Alex Rivera** — primary demo account with 3 collections (HTTPBin, JSONPlaceholder, Auth Playground), 18 saved requests covering all HTTP methods and all auth types, 3 environments (Development active, Production, Staging), and 5 history entries
+- **Alex Rivera** — primary demo account with 3 collections (API Sandbox, Sandbox REST API, Auth Playground), 19 saved requests covering all HTTP methods and all auth types, 3 environments (Development active, Production, Staging), and 5 history entries
 - **Jordan Kim** — secondary account with a minimal setup (1 collection, 1 environment) to demonstrate account isolation
-- **HTTPBin collection** — requests that return real data from httpbin.org using `{{baseUrl}}` from the active environment, including status code tests (201, 404) and delayed responses
+- **API Sandbox collection** — requests against the bundled local sandbox (`backend/src/features/sandbox`) using `{{baseUrl}}` from the active environment, including status code tests (201, 404) and delayed responses. The sandbox is a local stand-in for a public HTTP testing service like httpbin.org, so the app has no runtime dependency on the internet — see "Local Sandbox Instead of a Third-Party API" below.
 - **Auth Playground collection** — dedicated requests for each auth type, pre-configured with the correct settings so reviewers can test auth without any setup
 
 Every seeded request uses `{{baseUrl}}` so switching the active environment from Development to Production changes the target server with no other edits needed.
+
+## Local Sandbox Instead of a Third-Party API
+
+The seed data originally pointed example requests at `httpbin.org` and `jsonplaceholder.typicode.com`. That made the bundled demo — and the app's own installability — depend on outbound internet access and on two services staying up and unchanged. `backend/src/features/sandbox` replaces both: a small, unauthenticated Express router mounted at `/api/v1/sandbox` that echoes request method/headers/query/body (`/get`, `/post`, `/put`, `/patch`, `/delete`), returns a chosen status code or custom response headers, delays a response for the timing demo, checks bearer and basic auth, and serves a fixed in-memory `posts`/`comments`/`users` resource for the REST CRUD demo. It is intentionally unauthenticated and outside the account-scoped `/api/v1` surface (mounted before the `requireAuth` gate in `app.js`) because it plays the role of "some external API," not a product capability of the Postman clone — the request builder reaches it the exact same way it would reach any real external API, through the proxy's outbound `axios` call. The Development environment's `baseUrl` now points at `http://localhost:8000/api/v1/sandbox` instead of `https://httpbin.org`, and the seeded request URLs use `{{baseUrl}}` throughout, so the entire demo — collections, environments, auth flows, and history — works from a clean checkout with zero network access. The request builder itself is unaffected: nothing stops a user from pointing it at a real external API, that is the point of the tool.

@@ -34,13 +34,15 @@ coderepo-react-node-postman/
 │   │   │   ├── environments/    # Named environments with variable substitution
 │   │   │   ├── history/         # Auto-logged request history
 │   │   │   ├── proxy/           # Core HTTP request execution engine
+│   │   │   ├── sandbox/         # Local, offline HTTP test target (stands in for a public API like httpbin.org)
 │   │   │   └── snippets/        # Code snippet generation
 │   │   ├── scripts/
 │   │   │   └── seed.js          # Deterministic database seed
 │   │   ├── shared/
 │   │   │   ├── config/          # Environment config and MongoDB connection
 │   │   │   ├── errors/          # AppError class
-│   │   │   └── middleware/      # Auth guard and error handler
+│   │   │   ├── middleware/      # Auth guard and error handler
+│   │   │   └── utils/           # Variable substitution and auth-header helpers shared by proxy and snippets
 │   │   ├── app.js               # Express app factory
 │   │   └── index.js             # Server entry point
 │   ├── .env.example

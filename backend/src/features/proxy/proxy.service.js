@@ -1,37 +1,6 @@
 import axios from "axios";
 import { historyService } from "../history/history.service.js";
-
-function substituteVariables(text, variables) {
-	if (!text || !variables?.length) return text;
-	return text.replace(/\{\{(\w+)\}\}/g, (match, key) => {
-		const variable = variables.find((v) => v.enabled && v.key === key);
-		return variable !== undefined ? variable.value : match;
-	});
-}
-
-function buildAuthHeaders(auth) {
-	if (!auth || auth.type === "none") return {};
-	if (auth.type === "bearer" && auth.token) return { Authorization: `Bearer ${auth.token}` };
-	if (auth.type === "basic" && auth.username) {
-		const encoded = Buffer.from(`${auth.username}:${auth.password || ""}`).toString("base64");
-		return { Authorization: `Basic ${encoded}` };
-	}
-	return {};
-}
-
-function buildAuthQueryParam(auth) {
-	if (auth?.type === "apikey" && auth.apiKeyIn === "query" && auth.apiKeyName && auth.apiKeyValue) {
-		return { [auth.apiKeyName]: auth.apiKeyValue };
-	}
-	return {};
-}
-
-function buildAuthHeaderParam(auth) {
-	if (auth?.type === "apikey" && auth.apiKeyIn === "header" && auth.apiKeyName && auth.apiKeyValue) {
-		return { [auth.apiKeyName]: auth.apiKeyValue };
-	}
-	return {};
-}
+import { substituteVariables, substituteAuth, buildAuthHeaders, buildAuthHeaderParam, buildAuthQueryParam } from "../../shared/utils/request-transform.js";
 
 export const proxyService = {
 	async execute(accountId, requestData, envVariables = []) {
@@ -52,9 +21,10 @@ export const proxyService = {
 			queryMap[substitute(p.key)] = substitute(p.value);
 		}
 
-		Object.assign(headerMap, buildAuthHeaders(requestData.auth));
-		Object.assign(headerMap, buildAuthHeaderParam(requestData.auth));
-		Object.assign(queryMap, buildAuthQueryParam(requestData.auth));
+		const resolvedAuth = substituteAuth(requestData.auth, envVariables);
+		Object.assign(headerMap, buildAuthHeaders(resolvedAuth));
+		Object.assign(headerMap, buildAuthHeaderParam(resolvedAuth));
+		Object.assign(queryMap, buildAuthQueryParam(resolvedAuth));
 
 		let body = undefined;
 		const bodyType = requestData.bodyType || "none";

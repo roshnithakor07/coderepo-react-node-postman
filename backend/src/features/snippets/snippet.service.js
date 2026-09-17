@@ -1,36 +1,23 @@
-function substituteVariables(text, variables) {
-	if (!text || !variables?.length) return text;
-	return text.replace(/\{\{(\w+)\}\}/g, (match, key) => {
-		const variable = variables.find((v) => v.enabled && v.key === key);
-		return variable !== undefined ? variable.value : match;
-	});
-}
+import { substituteVariables, substituteAuth, buildAuthHeaders, buildAuthHeaderParam, buildAuthQueryParam } from "../../shared/utils/request-transform.js";
 
-function buildHeaders(requestData, envVars) {
+function buildHeaders(requestData, resolvedAuth, envVars) {
 	const sub = (t) => substituteVariables(t, envVars);
 	const headers = {};
 	for (const h of (requestData.headers || []).filter((h) => h.enabled && h.key)) {
 		headers[sub(h.key)] = sub(h.value);
 	}
-	const auth = requestData.auth || {};
-	if (auth.type === "bearer" && auth.token) headers["Authorization"] = `Bearer ${auth.token}`;
-	if (auth.type === "basic" && auth.username) {
-		const encoded = Buffer.from(`${auth.username}:${auth.password || ""}`).toString("base64");
-		headers["Authorization"] = `Basic ${encoded}`;
-	}
-	if (auth.type === "apikey" && auth.apiKeyIn === "header" && auth.apiKeyName) {
-		headers[auth.apiKeyName] = auth.apiKeyValue || "";
-	}
+	Object.assign(headers, buildAuthHeaders(resolvedAuth));
+	Object.assign(headers, buildAuthHeaderParam(resolvedAuth));
 	if (requestData.bodyType === "json" && requestData.body) headers["Content-Type"] = headers["Content-Type"] || "application/json";
 	return headers;
 }
 
-function buildQueryString(requestData, envVars) {
+function buildQueryString(requestData, resolvedAuth, envVars) {
 	const sub = (t) => substituteVariables(t, envVars);
 	const params = (requestData.params || []).filter((p) => p.enabled && p.key);
-	const auth = requestData.auth || {};
-	if (auth.type === "apikey" && auth.apiKeyIn === "query" && auth.apiKeyName) {
-		params.push({ key: auth.apiKeyName, value: auth.apiKeyValue || "" });
+	const queryAuth = buildAuthQueryParam(resolvedAuth);
+	for (const [key, value] of Object.entries(queryAuth)) {
+		params.push({ key, value });
 	}
 	if (!params.length) return "";
 	return "?" + params.map((p) => `${encodeURIComponent(sub(p.key))}=${encodeURIComponent(sub(p.value))}`).join("&");
@@ -39,10 +26,11 @@ function buildQueryString(requestData, envVars) {
 export const snippetService = {
 	generate(requestData, envVariables, language) {
 		const sub = (t) => substituteVariables(t, envVariables);
-		const url = sub(requestData.url || "") + buildQueryString(requestData, envVariables);
+		const resolvedAuth = substituteAuth(requestData.auth, envVariables);
+		const url = sub(requestData.url || "") + buildQueryString(requestData, resolvedAuth, envVariables);
 		const method = requestData.method || "GET";
-		const headers = buildHeaders(requestData, envVariables);
-		const body = requestData.bodyType !== "none" ? requestData.body : null;
+		const headers = buildHeaders(requestData, resolvedAuth, envVariables);
+		const body = requestData.bodyType !== "none" ? sub(requestData.body) : null;
 
 		switch (language) {
 			case "curl":
