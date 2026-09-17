@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 export function SaveRequestModal({ request, collections, onClose, onSave }) {
-	const [name, setName] = useState(request?.name || `${request?.method || "GET"} ${request?.url || ""}`.slice(0, 80));
+	const [name, setName] = useState(request?.name || `${request?.method || "GET"} ${request?.url || ""}`.slice(0, 80).trim());
 	const [collectionId, setCollectionId] = useState(collections[0]?._id || "");
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState("");
@@ -10,56 +10,36 @@ export function SaveRequestModal({ request, collections, onClose, onSave }) {
 		if (!name.trim()) return setError("Request name is required.");
 		if (!collectionId) return setError("Select a collection.");
 		setSaving(true);
-		try {
-			await onSave(collectionId, { ...request, name: name.trim() });
-			onClose();
-		} catch (e) {
-			setError(e.message);
-		} finally {
-			setSaving(false);
-		}
+		try { await onSave(collectionId, { ...request, name: name.trim() }); onClose(); }
+		catch (e) { setError(e.message); } finally { setSaving(false); }
 	}
 
 	return (
-		<div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+		<div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
 			<div className="modal save-modal" role="dialog" aria-modal="true" aria-label="Save request">
 				<div className="modal-header">
 					<h2>Save request</h2>
 					<button className="modal-close" onClick={onClose} aria-label="Close">×</button>
 				</div>
 				<div className="modal-body">
-					{error && <div className="login-error" role="alert" style={{ marginBottom: 12 }}>{error}</div>}
+					{error && <div className="login-error" role="alert" style={{ marginBottom: 14 }}>{error}</div>}
 					<div className="save-field">
 						<label htmlFor="req-name">Request name</label>
-						<input
-							id="req-name"
-							className="save-input"
-							value={name}
-							onChange={(e) => setName(e.target.value)}
-							placeholder="My request"
-							autoFocus
-						/>
+						<input id="req-name" className="save-input" value={name} onChange={e => setName(e.target.value)} placeholder="My request" autoFocus />
 					</div>
 					<div className="save-field">
-						<label htmlFor="col-select">Save to collection</label>
-						{collections.length === 0 ? (
-							<p style={{ color: "var(--muted)", fontSize: 13, margin: 0 }}>
-								No collections found. Create a collection first.
-							</p>
-						) : (
-							<select id="col-select" className="save-select" value={collectionId} onChange={(e) => setCollectionId(e.target.value)}>
-								{collections.map((c) => (
-									<option key={c._id} value={c._id}>{c.name}</option>
-								))}
+						<label htmlFor="col-sel">Collection</label>
+						{collections.length === 0
+							? <p className="auth-none-msg">No collections found. Create a collection first from the sidebar.</p>
+							: <select id="col-sel" className="save-select" value={collectionId} onChange={e => setCollectionId(e.target.value)}>
+								{collections.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
 							</select>
-						)}
+						}
 					</div>
 				</div>
 				<div className="modal-footer">
 					<button className="btn-ghost" onClick={onClose}>Cancel</button>
-					<button className="btn-primary" onClick={handleSave} disabled={saving || !collectionId || !name.trim()}>
-						{saving ? "Saving…" : "Save"}
-					</button>
+					<button className="btn-primary" onClick={handleSave} disabled={saving || !collectionId || !name.trim()}>{saving ? "Saving…" : "Save to collection"}</button>
 				</div>
 			</div>
 		</div>
