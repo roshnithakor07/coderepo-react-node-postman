@@ -219,3 +219,23 @@ branch=main
 repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
 worktree=main
 parent_agent=none
+
+---
+
+## [2026-09-17T10:00:00+05:30] UI patch — section visibility, scrollbars, splitter, inline-form
+
+User Prompt (verbatim, secrets redacted):
+UI Improvement — Section Visibility, Resizing & Scrolling. Add subtle borders/dividers or slight background contrast so each section is clearly distinguishable. Make the Response panel divider/resize handle more visible. Add scrollbars where content can overflow. Fix cut-off ✓ and ✕ buttons in inline collection form.
+
+Agent Response Summary:
+Targeted CSS-only patch — no component logic changed. Changes made: (1) sidebar border-right upgraded from border-subtle to border-default for clear left edge; (2) sidebar-content and response-body-wrap switched from overflow-y:auto to overflow-y:scroll so scrollbar track is always visible; (3) tab-panel also set to overflow-y:scroll with thin scrollbar; (4) request-builder bottom border upgraded to 2px border-default to clearly separate URL bar from tabs; (5) tabs row given bg-elevated background to separate visually from request-bar above; (6) splitter height increased from 4px to 6px, added ::before pseudo-element as a 48px pill drag handle that turns brand orange on hover — makes drag affordance obvious; (7) response-viewer gets border-top and response-bar gets border-default bottom for clear section start; (8) inline-form fixed: input gets min-width:0 so it can shrink, buttons get fixed width:30px and flex-shrink:0 so ✓ and ✕ are never cut off regardless of sidebar width.
+
+Actions:
+* Updated frontend/src/styles.css — 8 targeted rule changes only, no color scheme changes
+
+Context:
+tool=Claude (claude.ai chat)
+branch=main
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
+worktree=main
+parent_agent=none
