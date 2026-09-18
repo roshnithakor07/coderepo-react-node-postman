@@ -63,6 +63,8 @@ export function RequestBuilder({ request, onRequestChange, onSend, onSave, sendi
 				</button>
 			</div>
 
+			{sending && <div className="request-loading-bar" role="progressbar" aria-label="Sending request"><span /></div>}
+
 			<div className="tabs" role="tablist">
 				{tabs.map(({ label, badge }) => (
 					<button key={label} role="tab" className={`tab-btn ${activeTab === label ? "active" : ""}`} aria-selected={activeTab === label} onClick={() => setActiveTab(label)}>

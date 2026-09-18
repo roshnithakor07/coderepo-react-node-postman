@@ -670,3 +670,30 @@ branch=main
 repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
 worktree=main
 parent_agent=none
+
+---
+
+## [2026-09-18T14:39:44+00:00] Postman-style Send loading indicator (research-first UI polish)
+
+User Prompt (verbatim, secrets redacted):
+"Before making any code changes, first verify the CURRENT Postman UI behavior for sending a request. Please check official/current Postman documentation and, if possible, a current Postman UI reference/screenshot to understand exactly how Postman represents an in-progress request. Specifically investigate: What happens to the Send button while a request is being sent ... Whether Postman shows a horizontal loading/progress indicator ... Whether the Send button is disabled during the request ... Do NOT assume the UI behavior from memory. Then inspect our existing implementation and determine the smallest way to reproduce the relevant Postman-style behavior without changing request functionality ... Requirements: Reuse the existing loading state if available. Do not change request execution logic. Do not change backend/API/history/collections/params/auth behavior. Do not add request cancellation. Keep the existing dark theme. Keep the change minimal and production-quality. Do not make unrelated UI changes. ... Update README.md only if this change materially affects the documented features, usage, setup, or behavior. Do not commit or push yet."
+
+Agent Response Summary:
+Researched current Postman behavior via WebSearch/WebFetch rather than relying on memory, as instructed. Cross-referenced multiple sources (postmanlabs/postman-app-support GitHub issues #11941 and #72, plus general search results): confirmed the Send button displays a "Sending request..." label and becomes non-actionable as a plain Send control while in flight (it morphs into a Cancel action in real Postman, which is explicitly out of scope here per "do not add request cancellation"), and confirmed Postman does NOT show a live-updating timer during sending (only after completion — that is literally an open Postman feature request). Could not find authoritative, specific documentation confirming a distinct horizontal progress-bar element in current Postman; only general community references to "an animation" during sending. Reported this honestly rather than inventing a claim.
+
+Inspected the existing implementation: App.jsx already holds a single sending boolean already passed to both RequestBuilder (button text -> "Sending...", disabled={!url || sending}) and ResponseViewer (loading pane) — the well-confirmed button behavior was already correctly implemented. The one gap worth closing, using only the existing sending state and no new logic, was a horizontal in-flight indicator; reused the app's own existing boot-screen shimmer pattern (.app-boot-progress / @keyframes boot-shimmer, already in styles.css) rather than inventing a new animation, for full dark-theme and design-system consistency. Added a 2px shimmering bar (.request-loading-bar) rendered only while sending, between the request bar and the Params/Auth/Headers/Body tabs. No request/response/backend logic touched. README left unchanged - this is an internal loading-state polish, not a documented feature change.
+
+Actions:
+* WebSearch + WebFetch: Postman Send button/loading-state research (postman-app-support issues #11941, #72; learning.postman.com; multiple search queries) - see report given directly to the user for full source list
+* Inspected frontend/src/App.jsx, RequestBuilder.jsx, ResponseViewer.jsx sending-state wiring
+* Edited frontend/src/features/request-builder/RequestBuilder.jsx - added a conditional .request-loading-bar reusing the existing sending prop
+* Edited frontend/src/styles.css - added .request-loading-bar / span rules reusing the existing boot-shimmer keyframe
+* cd frontend && bun run build (clean, 34 modules); cd backend && bun test (21 pass, unaffected)
+* Attempted a live headless-browser screenshot check; blocked by a missing system library (libnspr4.so) with no root access in this sandbox - same known environment limitation as earlier in this session, disclosed rather than skipped silently
+
+Context:
+tool=Claude Code
+branch=main
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
+worktree=main
+parent_agent=none
