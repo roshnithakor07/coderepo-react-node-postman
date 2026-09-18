@@ -16,8 +16,8 @@ function CollectionMenu({ collection, onRename, onDelete, onClose }) {
 	);
 }
 
-function CollectionItem({ collection, activeRequestId, onSelectRequest, onRenameCollection, onDeleteCollection }) {
-	const [open, setOpen] = useState(true);
+function CollectionItem({ collection, defaultOpen, activeRequestId, onSelectRequest, onRenameCollection, onDeleteCollection }) {
+	const [open, setOpen] = useState(defaultOpen);
 	const [menuOpen, setMenuOpen] = useState(false);
 	const requests = collection.requests || [];
 
@@ -121,6 +121,7 @@ export function Sidebar({ collections, history, activeRequestId, onSelectRequest
 										<CollectionItem
 											key={col._id}
 											collection={col}
+											defaultOpen={col._id === collections[0]?._id}
 											activeRequestId={activeRequestId}
 											onSelectRequest={onSelectRequest}
 											onRenameCollection={startRename}

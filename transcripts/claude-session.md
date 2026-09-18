@@ -795,3 +795,68 @@ branch=main
 repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
 worktree=main
 parent_agent=none
+
+---
+
+## [2026-09-18T15:30:38+00:00] Investigated collection-sidebar default expand/collapse UX (READ-ONLY, no code changed)
+
+User Prompt (verbatim, secrets redacted):
+"We are starting a NEW feature investigation for the collection sidebar. IMPORTANT: READ-ONLY INVESTIGATION ONLY. Do NOT modify code, seed data, tests, README, or configuration yet ... Goal: I want the Collections sidebar to have this UX: On initial application load, exactly ONE collection should be expanded by default. All other collections should initially be collapsed. The user can manually expand/collapse collections afterward. This should NOT become an accordion ... unless the existing implementation already behaves that way ... Prefer the existing primary/demo collection ("API Sandbox — HTTP Testing") as the initially expanded collection if that is appropriate ... FIRST, investigate the current implementation ... POSTMAN VERIFICATION: verify current Postman behavior using reliable/current sources ... Do NOT claim that 'one collection is open by default' is official Postman behavior unless the source explicitly supports it ... Then provide an INVESTIGATION REPORT ONLY ... After the report, STOP and wait for my approval before implementing anything."
+
+Agent Response Summary:
+Read frontend/src/features/workspace/Sidebar.jsx in full (confirmed via git log it hasn't been touched since the original UI redesign commit, so this is genuinely the current implementation). Found each CollectionItem holds its own independent `const [open, setOpen] = useState(true)` — every collection defaults to expanded on mount, with zero cross-collection coordination (not an accordion today) and zero persistence anywhere (grepped the whole frontend for localStorage usage — only session-token and theme use it; nothing about sidebar expand state). This means the current behavior is "all collections expanded on every load," not "all collapsed" and not "one expanded" — it doesn't yet match any of the three states the goal description considers.
+
+No existing "default/active collection" concept exists in the schema or API (Collection model has no isDefault/isPrimary flag). The only existing, reusable ordering signal is that the backend already returns collections sorted by {sortOrder: 1, createdAt: -1}, and the seeded "API Sandbox — HTTP Testing" collection is seeded at sortOrder 0 — meaning it is already, deterministically, collections[0] for the demo account. Recommended reusing "whichever collection is first in the array as already returned by the API" (collections[0]) as the one that defaults to expanded, rather than inventing a new backend concept — this generically satisfies the demo-account preference (API Sandbox ends up first) while still working sensibly for a brand-new account with its own first-created collection, and requires no schema/backend change.
+
+Researched official Postman documentation (learning.postman.com/docs/collections/use-collections/manage-collections and related pages) rather than assuming: confirmed collections are documented as manually expandable/collapsible via an arrow control, and "click a collection to open its overview ... and expand its contents" is documented interaction behavior. Explicitly did NOT find any official documentation of a specific default-open-state rule (not "all collapsed," not "exactly one expanded," nothing) — reported this honestly per the explicit instruction not to claim a default-state behavior unless a source supports it.
+
+Proposed (not implemented) the smallest change: pass a defaultOpen prop from Sidebar down to each CollectionItem, computed as `col._id === collections[0]?._id`, and change CollectionItem's initial state from `useState(true)` to `useState(defaultOpen)`. Because CollectionItem instances are already keyed by collection _id (existing code), this only affects true first-mount behavior (page load) — a user's manual toggles during the session survive ordinary re-renders (creating another collection, sending a request, etc.) since React reuses the same keyed instance rather than remounting it. Confirmed this preserves the current non-accordion behavior exactly (each CollectionItem's open state stays fully independent; no new coordination between siblings was proposed or needed). Flagged as an explicit boundary, not a gap to silently fix: manual toggle state does not persist across an actual page reload (no localStorage involved), matching the current mechanism's existing lack of persistence — only the initial value changes.
+
+Made no code, seed, test, README, or config changes. Delivered the full 10-point investigation report directly in chat and is waiting for approval before implementing anything.
+
+Actions:
+* Read frontend/src/features/workspace/Sidebar.jsx in full; confirmed via `git log --oneline -- Sidebar.jsx` it is unmodified since the original UI redesign commit (212cc4b)
+* grep -rn "localStorage" frontend/src/ — confirmed no expand/collapse persistence exists anywhere (only session-token and theme)
+* Traced backend collection ordering: backend/src/features/collections/collection.repository.js's findAllByAccount sorts {sortOrder: 1, createdAt: -1}; confirmed via seed.js that "API Sandbox — HTTP Testing" is seeded at sortOrder 0
+* WebSearch + WebFetch attempt: Postman collections sidebar expand/collapse documentation (learning.postman.com/docs/collections/use-collections/manage-collections and related search results) — confirmed the interaction is documented, confirmed no default-state rule is documented
+* No files modified — this was logged per AGENTS.md's unconditional per-turn logging requirement (Section 0, item 4: "for every user turn, append a summary entry"), which applies regardless of whether code changed, not because this specific investigation independently required it
+
+Context:
+tool=Claude Code
+branch=main
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
+worktree=main
+parent_agent=none
+
+---
+
+## [2026-09-18T15:34:18+00:00] Implemented collection-sidebar default expand/collapse (one collection open on initial load)
+
+User Prompt (verbatim, secrets redacted):
+"Implement the approved Collection Sidebar Default Expand/Collapse feature based ONLY on the investigation below. APPROVED BEHAVIOR: On initial application load, exactly ONE collection is expanded. The first collection in the existing collections array is expanded. All other collections are collapsed. The existing manual expand/collapse behavior remains unchanged. This is NOT an accordion ... IMPLEMENTATION: 1. Modify ONLY: frontend/src/features/workspace/Sidebar.jsx 2. Pass a defaultOpen prop from Sidebar to CollectionItem. 3. Compute: defaultOpen={col._id === collections[0]?._id} 4. Change CollectionItem's initial state from useState(true) to useState(defaultOpen) ... Do not lift state unless absolutely necessary ... DO NOT: Commit. Push. Modify seed data. Modify backend files. Add dependencies. Start another feature."
+
+Agent Response Summary:
+Problem observed (from the preceding read-only investigation): every CollectionItem independently initialized `useState(true)`, so all collections were expanded on every load — not the desired "exactly one, first-in-list, expanded by default" state, and not persisted anywhere (confirmed via grep — no localStorage usage for sidebar state).
+
+Implemented exactly the four-line change specified, nothing more: CollectionItem now accepts a `defaultOpen` prop and initializes `useState(defaultOpen)` instead of `useState(true)`; Sidebar's `.map()` now passes `defaultOpen={col._id === collections[0]?._id}` to each CollectionItem alongside the existing `key={col._id}`. This is minimal because it reuses the ordering the backend already returns (sortOrder ascending, then createdAt descending — no new backend/schema concept), and because CollectionItem instances are already keyed by `_id`, the new prop only affects true first-mount (page-load) behavior; React reuses the same instance (preserving whatever the user has since toggled) across ordinary re-renders within a session. This is not an accordion: CollectionItem's `open` state remains fully local and independent per instance — no state was lifted, no sibling coordination was added, and the existing `setOpen(o => !o)` toggle handler is completely untouched.
+
+Verified the defaultOpen boolean expression itself with a framework-free Bun script (not committed, deleted after use) covering the seeded 3-collection order, a single-collection account, an empty collections array (confirms no throw, since collections[0]?._id safely short-circuits), and a newly-appended 4th collection (confirms new collections default to collapsed and don't retroactively change which one was originally first) — 8/8 checks passed. Confirmed live against the real running app and seeded database that collections[0] for the demo account (alex.rivera@postman.dev) really is "API Sandbox — HTTP Testing" (sortOrder 0), matching the approved requirement exactly. Could not perform an interactive browser click-through in this sandbox (missing system library libnspr4.so, no root access) — same disclosed, unresolved environment limitation as earlier attempts in this session; confidence rests on the code diff itself (a trivial, standard React useState-initial-value change), the logic verification, and the live data confirmation.
+
+No backend, schema, seed, test, or README file was touched. No dependency added. No other feature started.
+
+Actions:
+* Edited frontend/src/features/workspace/Sidebar.jsx only:
+  - CollectionItem now takes a defaultOpen prop; useState(true) -> useState(defaultOpen)
+  - Sidebar's CollectionItem render call now passes defaultOpen={col._id === collections[0]?._id}
+* Framework-free Bun verification script for the defaultOpen expression (8/8 checks passed; not committed, deleted after use)
+* bun test (backend, 21 pass — unaffected, frontend-only change)
+* cd frontend && bun run build (clean, 34 modules)
+* Live verification against the running app + seeded DB: GET /api/v1/collections confirms collections[0] is "API Sandbox — HTTP Testing" (sortOrder 0) for the demo account
+* Reviewed git diff — confirmed the change is exactly the 4 lines specified, nothing else touched
+
+Context:
+tool=Claude Code
+branch=main
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
+worktree=main
+parent_agent=none
