@@ -193,6 +193,18 @@ async function seedCollections(account) {
 			description: "Delays the response by 1 second to test timing display.",
 			sortOrder: 7,
 		},
+		{
+			accountId: account._id,
+			collectionId: sandboxHttp._id,
+			name: "GET — Delayed response (5s, for loading/race testing)",
+			method: "GET",
+			url: "{{baseUrl}}/delay/5",
+			body: "",
+			bodyType: "none",
+			auth: { type: "none" },
+			description: "Delays the response by 5 seconds. Send this, then switch to a different request while it's still running to verify the loading indicator clears for the newly selected request and the delayed response is not applied once it arrives.",
+			sortOrder: 8,
+		},
 
 		// Sandbox REST API collection
 		{

@@ -761,3 +761,37 @@ branch=main
 repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
 worktree=main
 parent_agent=none
+
+---
+
+## [2026-09-18T15:23:01+00:00] Added a seeded 5-second delay request for reviewer race-condition/loading testing
+
+User Prompt (verbatim, secrets redacted):
+"One final small addition before we consider this round complete. Please add ONE dedicated local delay endpoint/request to the Collection so the reviewer can easily test the request loading and stale-request/race-condition behavior without relying on an external service such as httpbin. First inspect the existing local sandbox architecture and seeded Collection/request structure. Requirements: 1. Add exactly ONE delay endpoint to the existing local sandbox ... 2. Add exactly ONE saved request for this endpoint in a clearly named/separate testing collection or the most appropriate existing collection ... 3. The endpoint must be completely local ... 4. Do not add multiple delay endpoints or unnecessary variants ... 5. Keep the implementation minimal and consistent with the existing sandbox architecture. 6. Do NOT change the existing request/response behavior, proxy logic, history logic, Params/URL synchronization, or race-condition implementation. 7. Ensure the seeded request is available after a clean setup/seed ... Do NOT commit or push yet."
+
+Agent Response Summary:
+Inspected sandbox.controller.js and sandbox.routes.js before writing anything and found `GET /api/v1/sandbox/delay/:seconds` already exists and is already capped at a maximum of 5 seconds (`Math.min(Math.max(Number(request.params.seconds) || 0, 0), 5)`) — so requirement 1 was already satisfied by existing code and adding a second/duplicate endpoint would have violated requirement 4 ("do not add ... unnecessary variants"). No backend route or controller change was made.
+
+Inspected seed.js's seedCollections() and found the "API Sandbox — HTTP Testing" collection already contains a "GET — Delayed response (1s)" request (`{{baseUrl}}/delay/1`, sortOrder 7) — the most appropriate existing collection per the task's own alternative wording, and consistent with "keep the implementation minimal." Added exactly one new SavedRequest immediately after it (sortOrder 8): "GET — Delayed response (5s, for loading/race testing)", `{{baseUrl}}/delay/5`, with a description explaining its specific reviewer-testing purpose (send it, then switch to a different request while it's running, to verify the loading indicator and the stale-response guard from the immediately preceding fix). No new Collection document was created — one new request in the existing, purpose-matching collection.
+
+README.md's "Seeded data counts" table stated SavedRequest: 19, which became factually incorrect the moment the new request was seeded (verified: seeding now creates 20). Updated that one number for accuracy — not a feature-description change, so no other README content was touched.
+
+Actions:
+* Read backend/src/features/sandbox/sandbox.controller.js and sandbox.routes.js — confirmed the /delay/:seconds endpoint (max 5s) already exists; no backend code changed
+* Read backend/src/scripts/seed.js's seedCollections() to find the existing 1s delay request's exact position
+* Edited backend/src/scripts/seed.js — added one SavedRequest ("GET — Delayed response (5s, for loading/race testing)", {{baseUrl}}/delay/5, sortOrder 8) to the existing "API Sandbox — HTTP Testing" collection
+* Edited README.md — corrected the SavedRequest seed count (19 -> 20) for accuracy
+* bun run seed against the live DB — confirmed 20 saved requests created (was 19)
+* Live verification: `curl http://localhost:8000/api/v1/sandbox/delay/5` measured ~5.13s elapsed, returned a normal 200 JSON response with delaySeconds:5
+* Live verification: fetched /api/v1/collections and confirmed the new request appears under "API Sandbox — HTTP Testing" with the correct url and sortOrder
+* Live verification: sent it through the actual /api/v1/proxy endpoint (the same path the Request Builder's Send button uses) — status 200, responseTime ~6.45s, error: null
+* Race-condition/loading behavior: not re-tested with new logic, because none was added — this request exercises the exact same handleSend/updateRequest code path already verified against 5 scenarios (A-E, 16 assertions) in the immediately preceding task; this addition only gives reviewers a concrete, discoverable, purely-local way to trigger that same path without needing an external slow endpoint
+* bun test (backend, 21 pass, unaffected); cd frontend && bun run build (clean, 34 modules, unaffected — no frontend files touched)
+* git diff/status reviewed: only backend/src/scripts/seed.js and README.md changed; confirmed proxy logic, history logic, Params/URL synchronization, and the race-condition implementation in App.jsx were not touched
+
+Context:
+tool=Claude Code
+branch=main
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
+worktree=main
+parent_agent=none

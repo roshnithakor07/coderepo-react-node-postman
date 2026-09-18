@@ -207,7 +207,7 @@ Connects to `mongodb://localhost:27017/postman_db`.
 |---|---|
 | WorkspaceAccount | 2 |
 | Collection | 4 |
-| SavedRequest | 19 |
+| SavedRequest | 20 |
 | Environment | 4 |
 | History | 5 |
 
