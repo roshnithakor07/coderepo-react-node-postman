@@ -56,6 +56,13 @@ export function PostmanWorkspace({ account, onLogout }) {
 	const [splitterY, setSplitterY] = useState(45);
 	const draggingRef = useRef(false);
 	const containerRef = useRef(null);
+	// Bumped by every action that changes what "the current request" means —
+	// selecting a saved/history request, or editing any field. handleSend()
+	// captures this before its await and checks it after: if a slower, earlier
+	// send's result comes back after the user has moved on, its generation no
+	// longer matches and the stale response/error/loading state is discarded
+	// instead of being applied on top of whatever is now on screen.
+	const requestGenerationRef = useRef(0);
 
 	const loadCollections = useCallback(async () => {
 		try {
@@ -88,20 +95,32 @@ export function PostmanWorkspace({ account, onLogout }) {
 		loadHistory();
 	}, [loadCollections, loadEnvironments, loadHistory]);
 
+	// Single centralized place every request-context change flows through:
+	// RequestBuilder's onRequestChange (method/url/params/headers/auth/body
+	// edits) and both request-selection handlers all call this instead of
+	// setRequest directly, so none of those trigger points need their own
+	// copy of the invalidation logic.
+	function updateRequest(next) {
+		requestGenerationRef.current += 1;
+		setSending(false);
+		setRequest(next);
+	}
+
 	async function handleSend() {
 		if (!request.url || sending) return;
+		const generation = requestGenerationRef.current;
 		setSending(true);
 		setResponse(null);
 		setError("");
 		try {
 			const activeEnv = environments.find((e) => e.isActive);
 			const result = await proxyApi.send({ ...request, environmentId: activeEnv?._id });
-			setResponse(result);
+			if (requestGenerationRef.current === generation) setResponse(result);
 			await loadHistory();
 		} catch (e) {
-			setError(e.message);
+			if (requestGenerationRef.current === generation) setError(e.message);
 		} finally {
-			setSending(false);
+			if (requestGenerationRef.current === generation) setSending(false);
 		}
 	}
 
@@ -116,7 +135,7 @@ export function PostmanWorkspace({ account, onLogout }) {
 	}
 
 	function handleSelectRequest(req) {
-		setRequest({
+		updateRequest({
 			method: req.method || "GET",
 			url: req.url || "",
 			params: req.params || [],
@@ -136,7 +155,7 @@ export function PostmanWorkspace({ account, onLogout }) {
 		// query string here, the same way typing/pasting a URL does, so the base
 		// stored back into request.url is query-free and nothing gets sent twice.
 		const { base, params } = syncParamsFromUrlEdit(entry.url || "", []);
-		setRequest({
+		updateRequest({
 			method: entry.method || "GET",
 			url: base,
 			params,
@@ -261,7 +280,7 @@ export function PostmanWorkspace({ account, onLogout }) {
 					<div className="resizable-pane" style={{ flex: `0 0 ${splitterY}%`, minHeight: "160px" }}>
 						<RequestBuilder
 							request={request}
-							onRequestChange={setRequest}
+							onRequestChange={updateRequest}
 							onSend={handleSend}
 							onSave={() => setShowSave(true)}
 							sending={sending}

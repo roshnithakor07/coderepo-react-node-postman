@@ -697,3 +697,67 @@ branch=main
 repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
 worktree=main
 parent_agent=none
+
+---
+
+## [2026-09-18T14:56:56+00:00] Investigated a request-state race condition when switching requests mid-send (READ-ONLY, no code changed)
+
+User Prompt (verbatim, secrets redacted):
+"I noticed a possible request-state/concurrency issue during manual testing. Please investigate this READ-ONLY first — do NOT modify code yet. Scenario: 1. Send a slow request, for example: https://httpbin.org/delay/5 2. While that request is still in flight and the UI shows "Sending...", select a different request from Collections or History. 3. The request builder immediately changes to the newly selected request, but the app still shows the loading state from the previous request. I need you to determine whether this is expected behavior or a real UX/state-management issue. IMPORTANT: Please first verify how CURRENT Postman behaves in the same scenario. Do not assume based on memory." Investigation was scoped into: loading-state ownership, response race condition, multiple-send behavior, full state-flow trace through App.jsx/RequestBuilder/ResponseViewer, and a Postman behavior comparison with sources. Explicitly: do not implement anything, do not commit or push.
+
+Agent Response Summary:
+Researched current/historical Postman behavior via WebSearch/WebFetch rather than assuming: confirmed via Postman's official "Navigating Postman" docs that each request lives in its own tab with independent state (busy/unsaved indicators per tab), and — critically — found this exact scenario (send a slow request, open/select another request before the response arrives) reported as a genuine BUG against Postman itself: postmanlabs/postman-app-support issue #6992 ("Fired request getting replaced by another request while waiting for a response," filed July 2019), where the second request's tab ended up showing the FIRST request's response data. Postman's own team treated this as a defect to fix (linked PR #8831), not as acceptable/expected behavior, and the reporter's expected behavior — "the new tab should not replace the older tab and response should be displayed for the request it was sent for" — is exactly the correctness bar this app is missing too.
+
+Traced our own implementation precisely: App.jsx holds `sending`, `response`, and `error` as single, global (not per-request) pieces of state. `handleSend()` sets `sending=true`, awaits `proxyApi.send(...)`, and on resolution unconditionally calls `setResponse(result)` / `setError(e.message)` / `setSending(false)` — with no check for whether the request it started is still the one currently displayed. `handleSelectRequest()` and `handleSelectHistory()` reset `request`, `activeRequestId`, `response`, and `error` when the user switches, but never touch `sending`. Confirmed `ResponseViewer` takes no request-identity prop at all — it only ever renders `sending`/`response` as flat booleans/values, with zero mechanism anywhere to correlate a response with which request produced it.
+
+Confirmed this reproduces exactly the reported symptom and a real race condition: switching to Request B while Request A is in flight leaves the stale global `sending=true` showing a "Sending…" state and loading bar that has nothing to do with B (B hasn't been sent), and B's Send button stays disabled the whole time. When A eventually resolves, `setResponse(result)` silently overwrites whatever is currently displayed with A's data, and the moment `sending` flips back to false, ResponseViewer renders A's response underneath B's method/URL/params in the builder — a genuine cross-request response leak, not merely a stuck spinner. History persistence itself is unaffected (A's history entry is recorded correctly server-side regardless of what the browser does with the response afterward) — this is purely a client-side render-state bug.
+
+Proposed (not implemented) a minimal fix: a ref-based "send generation" counter captured at the start of handleSend before the await, checked after the await resolves before applying setSending/setResponse/setError — the standard "ignore a stale async result" pattern, requiring no backend change, no actual HTTP/request cancellation (consistent with the earlier explicit "no request cancellation" constraint from a prior task), and touching only App.jsx. Flagged an open design question for the user to decide before implementation: should typing in the URL bar or editing Params also invalidate a pending send's relevance, not just selecting a different saved request/history entry?
+
+Made no code changes. Gave the user the full A-K investigation report directly in chat.
+
+Actions:
+* WebSearch + WebFetch: Postman tab/loading-state research — learning.postman.com/docs/getting-started/basics/navigating-postman/, postmanlabs/postman-app-support issues #6992 and #257 (cross-referenced), #5368
+* Read frontend/src/App.jsx (handleSend, handleSelectRequest, handleSelectHistory, state declarations) and frontend/src/features/response-viewer/ResponseViewer.jsx (render-priority order: sending branch takes precedence over response branch)
+* No files modified; no tests run (investigation only, no code change to verify)
+
+Context:
+tool=Claude Code
+branch=main
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
+worktree=main
+parent_agent=none
+
+---
+
+## [2026-09-18T15:07:48+00:00] Fixed the request-state race condition (stale-send generation guard)
+
+User Prompt (verbatim, secrets redacted):
+"Approved to implement the request-state race-condition fix. ... Implement the smallest production-safe fix. Requirements: 1. Use the proposed send-generation / stale-result guard pattern ... 2. IMPORTANT — do not guard only collection/history selection. First inspect how request state is updated throughout App.jsx and determine which user actions change the request context. At minimum, invalidate the pending request when: selecting another Collection request, selecting another History request, editing the URL, editing Params, editing Headers, editing Auth, editing Body, changing the HTTP method. Use the existing centralized request-state update mechanism if one exists rather than adding scattered logic. 3. Do NOT cancel the actual HTTP request ... 4. Preserve all existing behavior ... 5. Do not change backend, API contract, database/schema, history persistence, or unrelated UI. 6. Avoid unnecessary refactoring ... 7. Important edge case: If Request A is sending and the user selects Request B, A's eventual response/error MUST NOT overwrite B. The stale A completion also must not incorrectly turn B's loading state off." Full verification matrix specified: core race (A), edit-during-request (B), normal success (C), normal error (D), loading-state precision including stale-completion-must-not-clear-newer-loading (E). "Do not introduce a frontend test framework ... Do NOT commit or push yet."
+
+Agent Response Summary:
+Inspected every place request state changes in App.jsx (grep for setRequest/onRequestChange) and confirmed there are exactly three call sites: RequestBuilder's onRequestChange prop (which RequestBuilder's own set()/onUrlChange helpers already route every method/url/params/headers/auth/body edit through — the existing centralized mechanism the task asked to reuse) and the two setRequest(...) calls inside handleSelectRequest/handleSelectHistory. Wrapped all three behind one new function, updateRequest(next), which increments a requestGenerationRef (useRef, already imported in App.jsx for accountRef) and resets sending to false before applying the new request — covering every required invalidation trigger (Collection selection, History selection, and every field edit routed through RequestBuilder) without adding any logic inside RequestBuilder, KeyValueEditor, AuthPanel, or any other component.
+
+handleSend() now captures `const generation = requestGenerationRef.current` synchronously before its await (it only reads the ref; only updateRequest writes it), and guards each of its three post-await state applications individually: setResponse(result), setError(e.message), and the finally block's setSending(false) each only fire if requestGenerationRef.current still equals the captured generation. loadHistory() is deliberately left unguarded — it always runs on completion regardless of staleness, since the original request did genuinely execute and its history entry should still appear in the sidebar even if the user has moved on; only what gets rendered as "the current response" is protected. The actual axios/backend call is untouched — the original request still runs to completion and is still recorded in History exactly as before; only the browser's decision about whether to render its result changed.
+
+Verified the guard logic with a framework-free Node/Bun script (not committed, deleted after use) that ports the exact new control flow line-for-line using real Promises with manually-controlled resolution timing to reproduce the actual race deterministically, rather than relying on wall-clock timing or a browser. All 5 required scenarios (A-E), 16 assertions, passed: the core race (select B mid-send discards A's stale response and clears the stale loading state immediately), edit-during-request (same discard via the same centralized path), normal success and normal error (both unaffected when nothing interrupts the send), and critically scenario E — starting A, switching to B, sending B for real, then letting A's stale completion arrive — confirmed A's late finally-block does NOT clear B's own genuinely-in-flight sending=true, and does NOT leak A's response in while B is still sending.
+
+Actions:
+* Read frontend/src/App.jsx in full (state declarations, handleSend, handleSelectRequest, handleSelectHistory, RequestBuilder prop wiring) to find every request-state mutation point before changing anything
+* Edited frontend/src/App.jsx:
+  - added requestGenerationRef (useRef(0))
+  - added updateRequest(next): bumps the generation, resets sending to false, then setRequest(next)
+  - handleSelectRequest and handleSelectHistory now call updateRequest(...) instead of setRequest(...) directly
+  - RequestBuilder's onRequestChange prop now points to updateRequest instead of raw setRequest
+  - handleSend captures the generation before its await and guards setResponse/setError/the finally block's setSending(false) individually; loadHistory() remains unguarded (always runs)
+* Framework-free Bun verification script covering scenarios A-E (16/16 assertions passed; not committed, deleted after use)
+* bun test (backend, 21 pass — unaffected, frontend-only change)
+* cd frontend && bun run build (clean, 34 modules)
+* Live sanity check against the running app: /api/v1/health still reports a connected database, frontend still serves 200
+
+Context:
+tool=Claude Code
+branch=main
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
+worktree=main
+parent_agent=none
