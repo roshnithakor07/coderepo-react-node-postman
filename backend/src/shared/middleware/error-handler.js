@@ -12,6 +12,12 @@ export function errorHandler(error, request, response, next) {
 	if (error instanceof AppError) {
 		return response.status(error.statusCode).json({ error: { code: error.code, message: error.message, details: error.details } });
 	}
+	if (error.type === "entity.parse.failed") {
+		return response.status(400).json({ error: { code: "INVALID_JSON", message: "Request body must be valid JSON." } });
+	}
+	if (error.name === "CastError" && error.kind === "ObjectId") {
+		return response.status(400).json({ error: { code: "INVALID_ID", message: `The provided ${error.path || "id"} is not a valid identifier.` } });
+	}
 	console.error(error);
 	return response.status(500).json({ error: { code: "INTERNAL_ERROR", message: "An unexpected error occurred." } });
 }

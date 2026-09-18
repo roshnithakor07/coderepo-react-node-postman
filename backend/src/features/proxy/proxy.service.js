@@ -26,6 +26,8 @@ export const proxyService = {
 		Object.assign(headerMap, buildAuthHeaderParam(resolvedAuth));
 		Object.assign(queryMap, buildAuthQueryParam(resolvedAuth));
 
+		const fullUrl = axios.getUri({ url: rawUrl, params: queryMap });
+
 		let body = undefined;
 		const bodyType = requestData.bodyType || "none";
 		if (bodyType !== "none" && requestData.body) {
@@ -43,10 +45,36 @@ export const proxyService = {
 		const startTime = Date.now();
 		let historyEntry = {
 			method,
-			url: rawUrl,
+			url: fullUrl,
 			requestHeaders: headerMap,
 			requestBody: requestData.body || "",
 		};
+
+		const unresolvedVariable = rawUrl.match(/\{\{(\w+)\}\}/)?.[1];
+		if (unresolvedVariable) {
+			const responseTime = Date.now() - startTime;
+			const message = `Environment variable not resolved: ${unresolvedVariable}. Select an environment or enter a full URL.`;
+
+			await historyService.record(accountId, {
+				...historyEntry,
+				status: null,
+				responseTime,
+				responseHeaders: {},
+				responseBody: "",
+				responseSize: 0,
+				error: message,
+			});
+
+			return {
+				status: null,
+				statusText: null,
+				headers: {},
+				body: "",
+				responseTime,
+				size: 0,
+				error: message,
+			};
+		}
 
 		try {
 			const axiosResponse = await axios({

@@ -52,7 +52,7 @@ async function seedEnvironments(account) {
 			name: "Production",
 			isActive: false,
 			variables: [
-				{ key: "baseUrl", value: "https://api.example.com", enabled: true },
+				{ key: "baseUrl", value: "http://localhost:8000/api/v1/sandbox", enabled: true },
 				{ key: "apiKey", value: "prod-api-key-secret", enabled: true },
 				{ key: "userId", value: "1", enabled: true },
 				{ key: "timeout", value: "10000", enabled: true },
@@ -63,7 +63,7 @@ async function seedEnvironments(account) {
 			name: "Staging",
 			isActive: false,
 			variables: [
-				{ key: "baseUrl", value: "https://staging.example.com", enabled: true },
+				{ key: "baseUrl", value: "http://localhost:8000/api/v1/sandbox", enabled: true },
 				{ key: "apiKey", value: "staging-api-key-67890", enabled: true },
 				{ key: "userId", value: "99", enabled: true },
 				{ key: "timeout", value: "7500", enabled: true },
