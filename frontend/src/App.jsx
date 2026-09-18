@@ -8,6 +8,7 @@ import { EnvironmentsModal } from "./features/environments/EnvironmentsModal.jsx
 import { historyApi } from "./features/history/history.api.js";
 import { proxyApi, snippetApi } from "./features/request-builder/request.api.js";
 import { RequestBuilder } from "./features/request-builder/RequestBuilder.jsx";
+import { syncParamsFromUrlEdit } from "./features/request-builder/url.js";
 import { ResponseViewer } from "./features/response-viewer/ResponseViewer.jsx";
 import { AppHeader } from "./features/workspace/AppHeader.jsx";
 import { Sidebar } from "./features/workspace/Sidebar.jsx";
@@ -130,10 +131,15 @@ export function PostmanWorkspace({ account, onLogout }) {
 	}
 
 	function handleSelectHistory(entry) {
+		// History has no params field of its own (it only ever records the final,
+		// merged URL that was actually sent) — hydrate params from that URL's
+		// query string here, the same way typing/pasting a URL does, so the base
+		// stored back into request.url is query-free and nothing gets sent twice.
+		const { base, params } = syncParamsFromUrlEdit(entry.url || "", []);
 		setRequest({
 			method: entry.method || "GET",
-			url: entry.url || "",
-			params: [],
+			url: base,
+			params,
 			headers: Object.entries(entry.requestHeaders || {}).map(([key, value]) => ({ key, value, enabled: true })),
 			body: entry.requestBody || "",
 			bodyType: entry.requestBody ? "json" : "none",

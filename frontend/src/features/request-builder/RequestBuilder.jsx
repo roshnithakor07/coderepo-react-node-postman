@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { KeyValueEditor } from "./KeyValueEditor.jsx";
 import { AuthPanel } from "./AuthPanel.jsx";
+import { buildDisplayUrl, syncParamsFromUrlEdit } from "./url.js";
 
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
 const BODY_TYPES = ["none", "json", "form", "text", "xml"];
@@ -13,6 +14,13 @@ function hasAuth(auth) { if (!auth || auth.type === "none") return false; return
 export function RequestBuilder({ request, onRequestChange, onSend, onSave, sending }) {
 	const [activeTab, setActiveTab] = useState("Params");
 	const set = useCallback((field, value) => onRequestChange({ ...request, [field]: value }), [request, onRequestChange]);
+	const onUrlChange = useCallback(
+		(e) => {
+			const { base, params: nextParams } = syncParamsFromUrlEdit(e.target.value, request.params || []);
+			onRequestChange({ ...request, url: base, params: nextParams });
+		},
+		[request, onRequestChange],
+	);
 
 	const { method = "GET", url = "", params = [], headers = [], auth = { type: "none" }, body = "", bodyType = "none" } = request;
 
@@ -39,8 +47,8 @@ export function RequestBuilder({ request, onRequestChange, onSend, onSave, sendi
 				<input
 					className="url-input"
 					type="text"
-					value={url}
-					onChange={e => set("url", e.target.value)}
+					value={buildDisplayUrl(url, params)}
+					onChange={onUrlChange}
 					onKeyDown={e => (e.key === "Enter" && (e.ctrlKey || e.metaKey)) && onSend()}
 					placeholder="Enter request URL — use {{variable}} for environment values"
 					aria-label="Request URL"
