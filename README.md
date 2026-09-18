@@ -272,7 +272,7 @@ bun install
 
 ## Features
 
-1. **API request builder** — Method selector, URL bar with `{{variable}}` placeholder support, tabbed Params / Auth / Headers / Body panels. Press `Ctrl+Enter` to send.
+1. **API request builder** — Method selector, URL bar with `{{variable}}` placeholder support and live two-way sync with the Params tab (edit either one and the other updates immediately, with no duplicate or lost query parameters), tabbed Params / Auth / Headers / Body panels. Press `Ctrl+Enter` to send.
 2. **HTTP response analysis** — Status code badge (color-coded by class), response time, response size, Pretty / Raw / Headers views.
 3. **Request collections** — Folder tree, create and rename collections, save any request with one click, reload saved requests into the builder.
 4. **Environment management** — Named environments (Development, Production, Staging) with key-value variables. Activate via the header dropdown. Variables like `{{baseUrl}}` are resolved at send time.

@@ -363,3 +363,310 @@ branch=main
 repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
 worktree=main
 parent_agent=none
+
+---
+
+## [2026-09-18T12:00:00+00:00] SESSION START
+
+Agent: Claude Code
+Repo Root: /home/imroshni/hackerrank-project/coderepo-react-node-postman
+Branch: main
+Worktree: main
+Parent Agent: none
+Stack: node
+
+---
+
+## [2026-09-18T12:00:15+00:00] Full strict-evaluator audit of the current repository
+
+User Prompt (verbatim, secrets redacted):
+"FINAL POSTMAN PROJECT AUDIT — STRICT EVALUATOR REVIEW. IMPORTANT: DO NOT MODIFY ANY CODE YET. I want a complete, fresh audit of the CURRENT Postman-inspired application. Do not rely on previous reviews or assume the project is complete. Read and understand the current repository from scratch." Full brief specified reading project.txt/README/GUIDELINES/requirements, the entire frontend and backend, database/models/schema, API routes, auth, request execution/proxy, collections, environments, history, response analysis, tests, package.json, /skills, /transcripts, and project structure; classify every finding as BUG / MISSING REQUIREMENT / QUALITY GAP / PRODUCTION-READINESS GAP / OPTIONAL IMPROVEMENT; and produce a full structured report (CORE FEATURES, FUNCTIONALITY, UI/UX, ARCHITECTURE, TESTING, PRODUCTION READINESS, CRITICAL/HIGH/MEDIUM/LOW findings, VERIFIED WORKING, CORE REQUIREMENTS, verdicts). Explicitly: do not make changes, wait for approval.
+
+Agent Response Summary:
+Read every backend and frontend source file, README.md, GUIDELINES.md, REQUIREMENTS.md, INSTRUCTIONS.md, AGENTS.md, skills/validate/, and both existing transcripts. Ran a full live verification from a disposable /tmp clean checkout: bun install, vite build, setup.sh --seed against a real local MongoDB (Docker container on :27017), bun start, and live HTTP break-testing (auth, proxy, collections, environments, history, snippets, malformed JSON, invalid ObjectIds, cross-account isolation, cascade delete, unresolved-variable handling). Delivered a full structured report. Two HIGH-severity, concretely reproduced findings: (1) malformed JSON and invalid ObjectId route params return HTTP 500 instead of 400/404 across the whole API (error-handler.js doesn't special-case body-parser SyntaxError or Mongoose CastError); (2) request history records the pre-substitution URL, dropping query parameters that were actually sent (proxy.service.js stored rawUrl instead of the axios-resolved full URL). Also flagged several MEDIUM/LOW items (history reload fidelity, per-entry history delete UI unreachable, no automated tests, etc.) and confirmed 8 core features working end-to-end against live MongoDB. Final verdict: READY WITH NON-BLOCKING ISSUES. Made no file changes; cleaned up all /tmp test artifacts afterward.
+
+Actions:
+* Read entire backend (features/auth, collections, environments, history, proxy, sandbox, snippets, shared/config, shared/middleware, shared/errors, shared/utils, scripts/seed.js) and entire frontend (App.jsx, all feature components, shared/api, shared/utils, styles.css)
+* Read README.md, GUIDELINES.md, REQUIREMENTS.md, INSTRUCTIONS.md, AGENTS.md, skills/validate/SKILL.md, transcripts/02-design-decisions.md, transcripts/claude-session.md
+* bun install, vite build, bash setup.sh --seed, bun start against a disposable /tmp clean checkout and a live local MongoDB
+* Live HTTP testing via curl: auth, proxy (env substitution, auth types, malformed JSON, invalid ObjectId, cross-account isolation), collections cascade-delete, environments, history, snippets
+* Produced the full structured audit report (no files modified)
+
+Context:
+tool=Claude Code
+branch=main
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
+worktree=main
+parent_agent=none
+
+---
+
+## [2026-09-18T12:45:00+00:00] Fixed the two HIGH-severity audit findings only
+
+User Prompt (verbatim, secrets redacted):
+"I reviewed the final audit. We will fix ONLY the two HIGH-severity issues identified in the audit. DO NOT touch any other issue or feature. FIX #1 — BACKEND ERROR HANDLING ... Implement proper handling for: 1. Express/body-parser malformed JSON ... -> HTTP 400 with a clear INVALID_JSON-style error. 2. Mongoose CastError for invalid ObjectIds -> return an appropriate client error (400 or 404 ...), with a clear INVALID_ID-style error. FIX #2 — REQUEST HISTORY QUERY-PARAMETER FIDELITY ... Fix the history persistence so the recorded URL accurately represents the request that was actually sent ... Add focused regression tests for the two fixes using the project's existing test setup ... Do NOT fix the MEDIUM/LOW items ... Do not add new dependencies ... Hold all changes locally for my review. Do NOT commit or push yet."
+
+Agent Response Summary:
+Added two branches to error-handler.js (entity.parse.failed -> 400 INVALID_JSON; Mongoose CastError with kind ObjectId -> 400 INVALID_ID), preserving existing ZodError/AppError handling exactly. Fixed proxy.service.js to record axios.getUri({url: rawUrl, params: queryMap}) (the same URL-builder axios uses internally for the real request) as the history URL instead of the pre-params rawUrl, so history always matches what was actually sent — the outbound axios call itself was left unchanged. Since there was no existing test framework, added one using Bun's built-in test runner (bun:test, zero new dependencies) and wired a "test" script into backend/package.json and the root package.json. Verified everything live from a clean checkout: all four original 500-repro cases now return 400/404 correctly, all four query-fidelity scenarios record the exact URL the target actually received, and all previously-verified flows (auth, cross-account isolation, snippet generation, unresolved-variable handling) still pass with no regressions.
+
+Actions:
+* Edited backend/src/shared/middleware/error-handler.js — added INVALID_JSON and INVALID_ID branches
+* Edited backend/src/features/proxy/proxy.service.js — history now records axios.getUri(rawUrl, queryMap) instead of rawUrl
+* Added backend/src/shared/middleware/error-handler.test.js, backend/src/features/proxy/proxy.service.test.js, backend/src/app.test.js (bun:test, 17 tests total)
+* Added "test" script to backend/package.json and package.json
+* bun test (17 pass), cd frontend && bun run build (clean)
+* Live verification from a disposable /tmp clean checkout against real seeded MongoDB: all 4 original 500-repro cases, all 4 history-fidelity scenarios, plus a full regression pass
+
+Context:
+tool=Claude Code
+branch=main
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
+worktree=main
+parent_agent=none
+
+---
+
+## [2026-09-18T13:00:00+00:00] Launched and drove the running app; user reported a Production-environment failure mid-turn
+
+User Prompt (verbatim, secrets redacted):
+"run app"
+
+Agent Response Summary:
+Invoked the run skill; no project-specific run skill existed, so followed the generic web-server/browser-driven-app pattern. Started bun start against the real repo and a live local MongoDB (Docker), confirmed /api/v1/health reported a connected database and the frontend served on :3000. Attempted to set up a headless-Chromium driver (via Playwright, downloaded fresh into a scratch npm project — no new dependency added to the actual product) for a real click-through UI check; the Chromium download took a long time in the background. Before that finished, the user sent a new report mid-turn (see next entry) about a live failure they found while manually smoke-testing the running app.
+
+Actions:
+* bun start against the working repo (not a throwaway clone this time) and a live local MongoDB
+* curl health checks confirming both servers up and DB connected
+* npm install playwright (scratch dir, not the product) + npx playwright install chromium, run in background
+
+Context:
+tool=Claude Code
+branch=main
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
+worktree=main
+parent_agent=none
+
+---
+
+## [2026-09-18T13:05:00+00:00] Investigated the Production-environment {{baseUrl}} DNS failure (no code changes)
+
+User Prompt (verbatim, secrets redacted):
+"I noticed a potential issue during my browser smoke test. In the seeded Production environment: baseUrl = https://api.example.com when I send: {{baseUrl}}/get the request fails with: getaddrinfo ENOTFOUND api.example.com Development works correctly. Before changing anything, investigate the CURRENT project. Check: seed data, README, project.txt/requirements, environment business logic, local sandbox design, whether Production is intentionally a placeholder/demo environment, whether users are expected to edit the Production baseUrl before sending, whether this could be considered a broken seeded user flow by an evaluator. Do NOT modify anything yet. Tell me: A. Is this expected behavior or a genuine issue? B. Why is Production seeded with api.example.com? C. Should the seeded Production environment be directly usable? D. If it should be usable, what is the smallest correct fix? E. Make sure any fix continues to keep the app independent of third-party APIs."
+
+Agent Response Summary:
+Investigated seed.js, README, GUIDELINES, the environment business logic, and transcripts/02-design-decisions.md. Confirmed all 19 seeded requests use {{baseUrl}} uniformly, so switching to Production/Staging and sending any of them always fails — not an isolated case. The design-decisions transcript documents that Development was deliberately pointed at the bundled local sandbox to remove the app's own internet dependency, but Production/Staging were left as realistic-looking placeholder hosts (api.example.com / staging.example.com) purely to demonstrate environment switching, with no in-product signal that they're non-functional. Concluded: real but minor QUALITY GAP, not a bug in the error-handling (which already surfaced the DNS failure cleanly, no crash). Recommended the smallest correct fix — point Production and Staging's baseUrl at the same local sandbox the app already ships, keeping their other variables (apiKey/userId/timeout) distinct — which keeps the app fully free of third-party dependencies. Made no changes; waited for approval.
+
+Actions:
+* Read backend/src/scripts/seed.js, README.md, GUIDELINES.md, backend/src/features/environments/*, backend/src/features/proxy/proxy.service.js, backend/src/features/sandbox/*, transcripts/02-design-decisions.md
+* Confirmed the catch-block error path (from the earlier history-fidelity fix session context) surfaces error.message verbatim with no crash
+
+Context:
+tool=Claude Code
+branch=main
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
+worktree=main
+parent_agent=none
+
+---
+
+## [2026-09-18T13:10:00+00:00] Applied the two-line seed fix for Production/Staging baseUrl
+
+User Prompt (verbatim, secrets redacted):
+"Approved. Apply ONLY the two-line seed-data fix you proposed. File: backend/src/scripts/seed.js. Change: Production baseUrl -> http://localhost:8000/api/v1/sandbox, Staging baseUrl -> http://localhost:8000/api/v1/sandbox. Keep: Development unchanged, Production/Staging apiKey/userId/timeout unchanged, all other seed data unchanged. Do NOT modify: proxy logic, environment business logic, frontend, error handling, API behavior, sandbox implementation, any unrelated code. After the change: 1. Run the seed/reset flow. 2. Verify Development/Production/Staging seeded requests work. 3. Switch environments in the actual UI and send a seeded request from each. ... Do NOT commit or push yet."
+
+Agent Response Summary:
+Changed exactly the two baseUrl values in seed.js's Production and Staging blocks. Re-seeded the live database and verified via the running app's real API: all three environments now resolve {{baseUrl}} to the local sandbox while keeping apiKey/userId/timeout distinct per environment (confirmed live via a Bearer-auth request returning each environment's own apiKey, and via {{userId}} substitution differing per environment in recorded history). Ran the full backend test suite (21 pass) and frontend build (clean) — neither touches seed data so both were unaffected, confirming no regression. Confirmed no remaining runtime references to api.example.com/staging.example.com anywhere in the app.
+
+Actions:
+* Edited backend/src/scripts/seed.js — two baseUrl values changed to http://localhost:8000/api/v1/sandbox
+* bun run seed against the live DB; verified counts matched documented baseline
+* Live API verification: environments list, GET/Bearer/POST/DELETE across all three environments, history recording of the resolved per-environment URLs
+* bun test (21 pass), cd frontend && bun run build (clean)
+* grep confirmed no remaining example.com references in runtime code paths
+
+Context:
+tool=Claude Code
+branch=main
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
+worktree=main
+parent_agent=none
+
+---
+
+## [2026-09-18T13:20:00+00:00] Traced and fixed the generic "Invalid URL" error for unresolved {{variable}} placeholders
+
+User Prompt (verbatim, secrets redacted):
+"I tested the app after the latest changes and found one small UX improvement. When no environment is selected and the request URL contains: {{baseUrl}}/response-headers the UI currently shows: Request failed / Invalid URL. This is technically understandable, but it is not a helpful Postman-style error ... I want a more actionable user-facing error ... show something like: 'Environment variable not resolved: baseUrl. Select an environment or enter a full URL.' Requirements: Identify the actual unresolved variable name when possible. Do not show a generic 'Invalid URL' for this specific case. Do not change behavior for genuinely malformed URLs. Do not change successful requests. ... Before implementing, trace: Frontend -> proxy API -> variable substitution -> error handling -> response display. Then implement only this UX/error-message improvement. Add a focused regression test if the existing test setup makes this straightforward. Run: relevant backend tests, full backend test suite, frontend build, live verification with 4 specific cases. Do NOT commit or push yet."
+
+Agent Response Summary:
+Traced the exact path: substituteVariables() short-circuits and returns text unchanged whenever the variables array is empty (no environment selected) or a specific key has no match — either way a literal {{key}} reaches axios, which throws a bare "Invalid URL" caught by the generic catch block. Added an early check in proxy.service.js: if the resolved URL still contains an unresolved {{variable}} pattern, skip the axios call entirely and return the same response/history shape the existing catch block already uses, with the message "Environment variable not resolved: <name>. Select an environment or enter a full URL." No error-handler.js change needed (this was always a 200-with-payload-level failure, not an HTTP error, consistent with the app's existing convention). Added 4 regression tests to the existing proxy.service.test.js. Verified live against the real running app: no-environment-selected, valid-environment, genuinely-malformed-URL (still "Invalid URL", unaffected), and environment-selected-but-variable-missing all behaved exactly as required.
+
+Actions:
+* Edited backend/src/features/proxy/proxy.service.js — added the unresolved-variable pre-flight check before the axios call
+* Added 4 tests to backend/src/features/proxy/proxy.service.test.js (9 total in that file)
+* bun test src/features/proxy/proxy.service.test.js (9 pass), bun test (21 pass total), cd frontend && bun run build (clean)
+* Live verification of all 4 required scenarios against the running app + seeded database
+
+Context:
+tool=Claude Code
+branch=main
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
+worktree=main
+parent_agent=none
+
+---
+
+## [2026-09-18T13:35:59+00:00] First commit and push: error handling, history URL fidelity, unresolved-variable UX, and seed-data fixes
+
+User Prompt (verbatim, secrets redacted):
+"Approved. The current implementation has been reviewed and is working properly. Please commit and push the current approved changes to main. Do not make any additional code changes. Before committing, verify that only the intended reviewed files are included and that project.txt is not committed. After pushing, report: commit hash, files included, push result, final git status, confirmation that main and origin/main are synchronized."
+
+Agent Response Summary:
+Reviewed git status/diff against everything approved across the four prior tasks in this session (error-handler.js, proxy.service.js's two fixes, seed.js, plus the three new backend test files and two package.json test-script additions — 8 files total). Confirmed project.txt does not exist anywhere in the repository. Ran the full backend suite (21 pass) one final time as a pre-commit sanity check. Staged exactly the 8 intended files by explicit path (no git add -A), committed, and pushed to origin/main. Caught and fixed a real process gap on my own: the commit initially omitted the required Co-Authored-By attribution line, so amended it before pushing (nothing had been pushed yet, so amending was safe).
+
+Actions:
+* git add (8 explicit paths), git commit, git commit --amend (added missing attribution line), git push origin main
+* Commit d170ff356c95b5966de97770d24135f11d193798 — 8 files changed, 511 insertions
+* Confirmed main and origin/main synchronized (0/0 divergence) and working tree clean
+
+Context:
+tool=Claude Code
+branch=main
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
+worktree=main
+parent_agent=none
+
+---
+
+## [2026-09-18T13:45:00+00:00] Investigated live Params <-> URL synchronization (no code changes)
+
+User Prompt (verbatim, secrets redacted):
+"I want to improve the Request Builder UX to behave more like a real Postman-style API client. CURRENT BEHAVIOR: When the request is: {{baseUrl}}/put and I add an enabled query parameter: hello = noo the Params tab correctly contains the parameter, but the URL field still displays: {{baseUrl}}/put. DESIRED BEHAVIOR: The URL field should dynamically reflect the enabled query parameters ... DO NOT MODIFY CODE YET ... I specifically want to avoid this situation: UI URL shows ?hello=noo, Params also has hello=noo, Backend accidentally sends ?hello=noo&hello=noo ... IMPORTANT ARCHITECTURE QUESTION: Determine whether the URL input should become: A. the canonical source ... or B. URL path + Params should remain separate ... Prefer whichever approach is consistent with the CURRENT application's architecture ... Tell me: A. compatible? B. safest approach? C. files/functions? D. risks? E. worth it before submission?"
+
+Agent Response Summary:
+Traced RequestBuilder.jsx/App.jsx state and confirmed the backend (proxy.service.js) already independently merges url + params via axios with no deduplication against a URL's own existing query string — so making the URL bar's stored value carry a params-derived query while still sending params separately would reproduce exactly the duplication risk described. Recommended Option B: params remain the sole canonical source; the URL input becomes a pure, computed display value (a new buildDisplayUrl(url, params) function), with request.url, the API payload, saved-request persistence, and history recording all completely untouched — duplication-safe by construction since nothing about what's transmitted changes. Flagged one pre-existing, unrelated edge case (manually typing a query key that also matches an enabled Params row already double-sends today, independent of this feature) for the user's awareness. Identified the exact 2-file change surface. Made no changes; waited for approval.
+
+Actions:
+* Re-read RequestBuilder.jsx, KeyValueEditor.jsx, App.jsx (handleSend/handleSaveRequest/handleSelectRequest/handleSelectHistory), proxy.controller.js, proxy.service.js, request-transform.js
+* Verified axios.getUri's actual merge/encoding behavior directly via a Node script to confirm the safe design
+
+Context:
+tool=Claude Code
+branch=main
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
+worktree=main
+parent_agent=none
+
+---
+
+## [2026-09-18T14:00:00+00:00] Implemented live Params -> URL display and URL -> Params synchronization
+
+User Prompt (verbatim, secrets redacted):
+"Approved — implement Option B exactly as investigated. Requirements: Keep request.url unchanged as the stored/raw URL. Keep request.params unchanged as the canonical Params state. Do NOT change the backend, API payload, schema, saved requests, history, or proxy behavior. Make the URL input a computed display value that reflects enabled Params ... Use the smallest clean implementation ... 1. Add a small pure buildDisplayUrl(url, params) utility. 2. Update RequestBuilder.jsx ... 3. Keep the existing request.url state and send/save behavior untouched." Mid-turn follow-up: "The manual UI test exposed one remaining issue. Params -> URL is working correctly, but URL -> Params is NOT working. Example currently: URL: {{baseUrl}}/get?user=1&name=roshni Params tab: (empty). Please fix this as part of the SAME current feature ... Before changing code, inspect the current RequestBuilder/App state flow and determine the cleanest way to make URL -> Params synchronization work without creating an update loop between URL and Params."
+
+Agent Response Summary:
+Implemented buildDisplayUrl(url, params) in a new frontend/src/features/request-builder/url.js — a pure, render-time-only function wired to the URL input's value prop; request.url/params/send/save paths were left completely untouched. For the reverse direction, added syncParamsFromUrlEdit(typedValue, currentParams) in the same file, wired to the URL input's onChange: it reconciles the typed query string into the params array by key (update in place, add new, remove ones no longer present, disabled rows always preserved) and always returns a query-free base — so request.url can never again carry a query string that params also carries, eliminating the double-send risk by construction. Confirmed no update-loop is possible: buildDisplayUrl never calls a setter (pure render computation) and the Params-tab's own onChange never invokes the URL-sync function — two independent one-directional writers into the same params state, neither triggering the other's handler. Verified all 15 (then 22 combined) required scenarios with a throwaway Bun verification script exercising the actual shipped functions directly (no frontend test framework exists in this project, so this was not committed).
+
+Actions:
+* Added frontend/src/features/request-builder/url.js (buildDisplayUrl, syncParamsFromUrlEdit)
+* Edited frontend/src/features/request-builder/RequestBuilder.jsx — URL input value -> buildDisplayUrl(url, params), onChange -> new onUrlChange handler using syncParamsFromUrlEdit
+* bun test (21 pass, backend unaffected), cd frontend && bun run build (clean, 34 modules)
+* Throwaway Bun script verifying all Params->URL and URL->Params scenarios (deleted after use, not committed)
+* Confirmed handleSend/handleSaveRequest in App.jsx never reference the new display function, by inspection
+
+Context:
+tool=Claude Code
+branch=main
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
+worktree=main
+parent_agent=none
+
+---
+
+## [2026-09-18T14:15:00+00:00] Fixed History -> Params hydration on history reload
+
+User Prompt (verbatim, secrets redacted):
+"I found one remaining issue during the manual test. The normal URL -> Params flow works when I paste/type a URL, but it does NOT work when I load a request from History. Example: History loads: http://localhost:8000/api/v1/sandbox/get?user=1 But Params tab is empty ... Please fix this specifically for History loading. Requirements: 1. When selecting a History entry whose URL contains query parameters, hydrate request.params from those URL query parameters ... 4. Avoid duplicate params if the history object already contains params. 5. Do NOT modify backend behavior. 6. Do NOT modify history storage/schema unless absolutely necessary ... Please first inspect handleSelectHistory and the exact shape of history entries, then implement the smallest safe fix."
+
+Agent Response Summary:
+Inspected the History Mongoose schema and confirmed it has no params field at all — it only ever stores the final resolved url, so entry.params is always undefined and handleSelectHistory hardcoded params: []. Fixed this by reusing the already-shipped syncParamsFromUrlEdit(entry.url || "", []) directly inside handleSelectHistory in App.jsx — zero new logic, just wiring the existing, already-tested function into a second call site. Confirmed live against a real history entry generated through the running app (sent a request with two query params, fetched the resulting history row) that the schema assumption holds exactly. Requirement 4 (avoid duplicating pre-existing params) is a non-issue by construction since History never carries a params field to duplicate against.
+
+Actions:
+* Edited frontend/src/App.jsx — added the url.js import and updated handleSelectHistory to derive {base, params} via syncParamsFromUrlEdit instead of hardcoding params: []
+* Live verification: sent a real request with two query params through the running app, fetched the resulting history entry, confirmed its exact shape
+* Throwaway Bun script re-verifying all 9 required scenarios against the actual shipped function (deleted after use)
+* bun test (21 pass), cd frontend && bun run build (clean)
+* Confirmed handleSelectRequest (saved requests) untouched by inspection
+
+Context:
+tool=Claude Code
+branch=main
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
+worktree=main
+parent_agent=none
+
+---
+
+## [2026-09-18T14:25:00+00:00] Second commit and push: live Params <-> URL <-> History query-string synchronization
+
+User Prompt (verbatim, secrets redacted):
+"Approved. Commit and push the current working tree with all three approved query-parameter synchronization fixes: 1. Params -> URL dynamic display 2. URL -> Params synchronization 3. History URL -> Params synchronization. Do not make any additional code changes. Before committing: Review git diff/status. Confirm only the intended files are included. Do not include project.txt or unrelated files. Run the final relevant tests/build if needed. Then: Commit with a clear professional commit message. Push to main. Confirm the commit hash. Confirm push succeeded. Confirm git status is clean. Confirm local main matches origin/main."
+
+Agent Response Summary:
+Reviewed the full diff (frontend/src/App.jsx, frontend/src/features/request-builder/RequestBuilder.jsx, frontend/src/features/request-builder/url.js) against everything approved across the three Params/URL sub-tasks. Confirmed project.txt does not exist and no unrelated files were staged. Ran the backend suite and frontend build one final time as a pre-commit check. Staged exactly the 3 intended files, committed, and pushed to origin/main.
+
+Actions:
+* Reviewed git diff/status; bun test (21 pass); cd frontend && bun run build (clean)
+* git add (3 explicit paths), git commit, git push origin main
+* Commit 2557551 — 3 files changed, 102 insertions
+* Confirmed main and origin/main synchronized (0/0 divergence) and working tree clean
+
+Context:
+tool=Claude Code
+branch=main
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
+worktree=main
+parent_agent=none
+
+---
+
+## [2026-09-18T14:30:00+00:00] Checked whether the transcript log and README had been kept current
+
+User Prompt (verbatim, secrets redacted):
+"did you update transcript log file and readme if needed"
+
+Agent Response Summary:
+Checked both honestly rather than assuming: $HOME/hackerrank_postman/log.txt did not exist in this environment and had not been created or appended to at any point in this session, despite AGENTS.md's per-turn logging requirement — the transcripts/claude-session.md already committed in the repo was a copy from a prior session (dated Sept 17) and did not reflect any of this session's five tasks. README.md's last commit predated this session too, and its API-request-builder feature description didn't mention the new live Params<->URL sync. Reported both gaps directly, explained why (each task stayed narrowly scoped to what was explicitly asked), and offered to fix both rather than silently doing so.
+
+Actions:
+* ls "$HOME/hackerrank_postman/" (did not exist)
+* git log -1 -- README.md and git log -1 -- transcripts/ to confirm both predated this session's work
+
+Context:
+tool=Claude Code
+branch=main
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
+worktree=main
+parent_agent=none
+
+---
+
+## [2026-09-18T14:31:36+00:00] Updated README.md and backfilled the session transcript log
+
+User Prompt (verbatim, secrets redacted):
+"yup update both and push"
+
+Agent Response Summary:
+Updated README.md's "API request builder" feature line to mention the new live two-way Params<->URL sync (the only feature-level, user-visible change from this session worth documenting; the other fixes were internal correctness/UX repairs to behavior the README never described in the first place, so they didn't need README changes). Created $HOME/hackerrank_postman/log.txt (it did not exist previously) and backfilled it with a full, best-effort chronological reconstruction of every task in this session, using the AGENTS.md-specified entry format; appended the same content to transcripts/claude-session.md (append-only, nothing prior removed or reordered) so the repo copy matches. Per-entry timestamps are reconstructed from real evidence observed during the session (git commit timestamps, live HTTP response Date headers) rather than a continuously-kept clock, since no live log was maintained turn-by-turn.
+
+Actions:
+* Edited README.md — feature #1 description updated to mention live Params<->URL sync
+* Created $HOME/hackerrank_postman/log.txt (backfilled, this session's full history)
+* Appended the same entries to transcripts/claude-session.md
+
+Context:
+tool=Claude Code
+branch=main
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
+worktree=main
+parent_agent=none
