@@ -55,7 +55,7 @@ export function RequestBuilder({ request, onRequestChange, onSend, onSave, sendi
 					spellCheck={false}
 				/>
 
-				<button className="save-btn" onClick={onSave} disabled={!url || sending} title="Save to collection (S)">
+				<button className="save-btn" onClick={onSave} disabled={!url || sending} title="Save to collection">
 					Save
 				</button>
 				<button className="send-btn" onClick={onSend} disabled={!url || sending} aria-label="Send request">

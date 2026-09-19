@@ -1058,3 +1058,32 @@ branch=main
 repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
 worktree=main
 parent_agent=none
+
+---
+
+## [2026-09-19T12:22:41+00:00] Removed the stale "(S)" keyboard-shortcut claim from the Save button tooltip (Phase A)
+
+User Prompt (verbatim, secrets redacted):
+"Implement ONLY Change #3 from the approved Phase A plan: FIX THE STALE SAVE BUTTON TOOLTIP ... Goal: Remove the false '(S)' shortcut claim while preserving the Save button itself and all existing save behavior ... Do NOT implement a new keyboard shortcut. Do NOT change Ctrl+Enter behavior. Do NOT change save logic ... Do NOT modify unrelated tooltips ... Do NOT commit or push yet."
+
+Agent Response Summary:
+Inspected the Save button before editing (as instructed) and confirmed via grep there is exactly one occurrence of the stale claim: `title="Save to collection (S)"` on the save-btn in RequestBuilder.jsx. No "(S)" keyboard handler exists anywhere in the codebase — the button's onClick fires onSave directly; the only real keyboard shortcut in the app is Ctrl+Enter on the URL input, handled separately and untouched by this change.
+
+Changed the title attribute from "Save to collection (S)" to "Save to collection" — removing only the false shortcut claim, keeping the existing wording style. No other attribute (onClick, disabled, className, button text "Save") was touched. Confirmed via git diff that this is the only line changed in the file, and via a source-wide grep across frontend/src that no other tooltip anywhere references a similar stale shortcut claim, so no unrelated tooltip needed touching.
+
+Verification note: an initial grep against the compiled/minified production bundle for "(S)" produced a large amount of irrelevant noise (React's own minified internals happen to contain unrelated "(S)"-shaped substrings in variable/property names) — this was a mistake in verification method, not a finding, and was discarded in favor of the authoritative check: grep across the actual source tree (frontend/src), which returned zero matches for any other stale shortcut reference.
+
+Actions:
+* grep -n "save-btn|title=" frontend/src/features/request-builder/RequestBuilder.jsx — confirmed the single occurrence before editing
+* Edited frontend/src/features/request-builder/RequestBuilder.jsx — title="Save to collection (S)" -> title="Save to collection" (one line)
+* git diff reviewed — confirmed this is the only change in the file
+* grep -rn "(S)|(Ctrl" frontend/src/ — zero matches, confirming no other stale shortcut references exist
+* bun test (backend, 21 pass — unaffected, single-attribute frontend text change)
+* cd frontend && bun run build (clean, 33 modules)
+
+Context:
+tool=Claude Code
+branch=main
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
+worktree=main
+parent_agent=none
