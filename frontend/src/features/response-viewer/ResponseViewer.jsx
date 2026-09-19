@@ -7,6 +7,7 @@ function SnippetPanel({ request, activeEnvironmentId, onGenerateSnippet }) {
 	const [loading, setLoading] = useState(false);
 	const [copied, setCopied] = useState(false);
 	const generationRef = useRef(0);
+	const hasUrl = !!request?.url?.trim();
 
 	// Regenerates whenever the selected language, the request itself (new
 	// object identity on every field edit, see App.jsx's updateRequest), or
@@ -17,12 +18,21 @@ function SnippetPanel({ request, activeEnvironmentId, onGenerateSnippet }) {
 	// every change that should trigger a regeneration.
 	useEffect(() => {
 		const generation = ++generationRef.current;
-		setLoading(true);
+		if (!hasUrl) { setSnippet(""); setLoading(false); return; }
+		// Generation is normally near-instant; only flip on the loader if it's
+		// still running past this threshold, so a fast response never flashes it.
+		const loaderTimer = setTimeout(() => {
+			if (generationRef.current === generation) setLoading(true);
+		}, 150);
 		onGenerateSnippet(lang)
 			.then((r) => { if (generationRef.current === generation) setSnippet(r?.snippet || ""); })
 			.catch(() => { if (generationRef.current === generation) setSnippet("// Failed to generate snippet."); })
-			.finally(() => { if (generationRef.current === generation) setLoading(false); });
-	}, [lang, request, activeEnvironmentId]);
+			.finally(() => {
+				clearTimeout(loaderTimer);
+				if (generationRef.current === generation) setLoading(false);
+			});
+		return () => clearTimeout(loaderTimer);
+	}, [lang, request, activeEnvironmentId, hasUrl]);
 
 	async function copy() {
 		try { await navigator.clipboard.writeText(snippet); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch {}
@@ -47,7 +57,7 @@ function SnippetPanel({ request, activeEnvironmentId, onGenerateSnippet }) {
 				</>
 			)}
 			{!loading && !snippet && (
-				<p className="body-none-msg">Select a language above to generate a ready-to-use code snippet for this request.</p>
+				<p className="body-none-msg">Enter a request URL to generate a code snippet.</p>
 			)}
 		</div>
 	);

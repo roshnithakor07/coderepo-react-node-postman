@@ -364,13 +364,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .headers-table tr:last-child td { border-bottom: none; }
 
 /* ─── Snippets ─── */
-.snippet-panel { display: flex; flex-direction: column; gap: 10px; padding: 14px; }
-.snippet-lang-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.snippet-panel { display: flex; flex-direction: column; gap: 10px; padding: 14px; flex: 1; min-height: 0; overflow: hidden; }
+.snippet-lang-row { display: flex; gap: 6px; flex-wrap: wrap; flex-shrink: 0; }
 .snippet-lang-btn { height: 26px; padding: 0 12px; border: 1px solid var(--border-default); border-radius: 99px; color: var(--text-secondary); font-family: var(--font-mono); font-size: 11px; font-weight: 600; transition: all var(--t-fast); }
 .snippet-lang-btn:hover { border-color: var(--brand); color: var(--brand); }
 .snippet-lang-btn.active { background: var(--brand-dim); border-color: var(--brand); color: var(--brand); }
-.snippet-code { padding: 14px; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--bg-base); font-family: var(--font-mono); font-size: 12px; line-height: 1.7; color: var(--text-primary); white-space: pre-wrap; overflow-y: auto; max-height: 280px; }
-.snippet-actions { display: flex; justify-content: flex-end; }
+.snippet-code { padding: 14px; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--bg-base); font-family: var(--font-mono); font-size: 12px; line-height: 1.7; color: var(--text-primary); white-space: pre-wrap; word-break: break-all; overflow-y: auto; flex: 1; min-height: 0; }
+.snippet-actions { display: flex; justify-content: flex-end; flex-shrink: 0; }
 .snippet-copy-btn { height: 30px; padding: 0 14px; border: 1px solid var(--border-default); border-radius: var(--radius-md); background: transparent; color: var(--text-secondary); font-size: 12px; font-weight: 600; transition: all var(--t-fast); }
 .snippet-copy-btn:hover { border-color: var(--brand); color: var(--brand); background: var(--brand-dim); }
 .snippet-copied { color: var(--success) !important; border-color: var(--success) !important; background: var(--success-bg) !important; }
