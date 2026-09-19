@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { ConfirmDialog } from "../../shared/components/ConfirmDialog.jsx";
 
 function VariableEditor({ variables, onChange }) {
 	const update = (i, f, v) => onChange(variables.map((x, idx) => (idx === i ? { ...x, [f]: v } : x)));
@@ -28,6 +29,7 @@ export function EnvironmentsModal({ environments, onClose, onCreate, onUpdate, o
 	const [newName, setNewName] = useState("");
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState("");
+	const [confirmDialog, setConfirmDialog] = useState(null);
 
 	useEffect(() => {
 		const handler = e => { if (e.key === "Escape") onClose(); };
@@ -56,13 +58,21 @@ export function EnvironmentsModal({ environments, onClose, onCreate, onUpdate, o
 		try { await onActivate(env._id); } catch (e) { setError(e.message); }
 	}
 
-	async function handleDelete(env) {
-		if (!confirm(`Delete "${env.name}"?`)) return;
-		try { await onDelete(env._id); if (selected?._id === env._id) { setSelected(null); setCreating(false); } }
-		catch (e) { setError(e.message); }
+	function handleDelete(env) {
+		setConfirmDialog({
+			title: "Delete environment?",
+			message: `You’re about to permanently delete “${env.name}” and its variables. This action cannot be undone.`,
+			confirmLabel: "Delete environment",
+			onConfirm: async () => {
+				setConfirmDialog(null);
+				try { await onDelete(env._id); if (selected?._id === env._id) { setSelected(null); setCreating(false); } }
+				catch (e) { setError(e.message); }
+			},
+		});
 	}
 
 	return (
+		<>
 		<div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
 			<div className="modal" role="dialog" aria-modal="true" aria-label="Environments">
 				<div className="modal-header">
@@ -117,5 +127,12 @@ export function EnvironmentsModal({ environments, onClose, onCreate, onUpdate, o
 				</div>
 			</div>
 		</div>
+		{confirmDialog && (
+			<ConfirmDialog
+				{...confirmDialog}
+				onCancel={() => setConfirmDialog(null)}
+			/>
+		)}
+		</>
 	);
 }

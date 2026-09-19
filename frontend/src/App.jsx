@@ -13,6 +13,7 @@ import { ResponseViewer } from "./features/response-viewer/ResponseViewer.jsx";
 import { AppHeader } from "./features/workspace/AppHeader.jsx";
 import { Sidebar } from "./features/workspace/Sidebar.jsx";
 import { hasSessionToken, setSessionToken } from "./shared/api/client.js";
+import { ConfirmDialog } from "./shared/components/ConfirmDialog.jsx";
 
 const DEFAULT_REQUEST = { method: "GET", url: "", params: [], headers: [], body: "", bodyType: "none", auth: { type: "none" } };
 
@@ -50,6 +51,7 @@ export function PostmanWorkspace({ account, onLogout }) {
 	const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 	const [showEnvs, setShowEnvs] = useState(false);
 	const [showSave, setShowSave] = useState(false);
+	const [confirmDialog, setConfirmDialog] = useState(null);
 	const [splitterY, setSplitterY] = useState(45);
 	const draggingRef = useRef(false);
 	const containerRef = useRef(null);
@@ -176,16 +178,30 @@ export function PostmanWorkspace({ account, onLogout }) {
 		setCollections((prev) => prev.map((c) => (c._id === id ? { ...c, name: updated.name } : c)));
 	}
 
-	async function handleDeleteCollection(collection) {
-		if (!confirm(`Delete collection "${collection.name}" and all its requests?`)) return;
-		await collectionApi.remove(collection._id);
-		setCollections((prev) => prev.filter((c) => c._id !== collection._id));
+	function handleDeleteCollection(collection) {
+		setConfirmDialog({
+			title: "Delete collection?",
+			message: `You’re about to permanently delete “${collection.name}” and all requests inside it. This action cannot be undone.`,
+			confirmLabel: "Delete collection",
+			onConfirm: async () => {
+				setConfirmDialog(null);
+				await collectionApi.remove(collection._id);
+				setCollections((prev) => prev.filter((c) => c._id !== collection._id));
+			},
+		});
 	}
 
-	async function handleClearHistory() {
-		if (!confirm("Clear all request history?")) return;
-		await historyApi.clear();
-		setHistory([]);
+	function handleClearHistory() {
+		setConfirmDialog({
+			title: "Clear request history?",
+			message: "You’re about to permanently remove all saved request history. This action cannot be undone.",
+			confirmLabel: "Clear history",
+			onConfirm: async () => {
+				setConfirmDialog(null);
+				await historyApi.clear();
+				setHistory([]);
+			},
+		});
 	}
 
 	async function handleEnvChange(envId) {
@@ -313,6 +329,13 @@ export function PostmanWorkspace({ account, onLogout }) {
 					collections={collections}
 					onClose={() => setShowSave(false)}
 					onSave={handleSaveRequest}
+				/>
+			)}
+
+			{confirmDialog && (
+				<ConfirmDialog
+					{...confirmDialog}
+					onCancel={() => setConfirmDialog(null)}
 				/>
 			)}
 		</div>

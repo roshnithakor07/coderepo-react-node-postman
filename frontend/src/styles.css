@@ -387,6 +387,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .modal-body { flex: 1; overflow-y: auto; padding: 20px 24px; }
 .modal-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 16px 24px; border-top: 1px solid var(--border-default); flex-shrink: 0; }
 .save-modal { width: min(460px, 100%); }
+.confirm-dialog { width: min(420px, 100%); }
 .save-field { margin-bottom: 16px; }
 .save-field label { display: block; margin-bottom: 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; color: var(--text-secondary); }
 .save-input { width: 100%; height: 40px; padding: 0 12px; border: 1px solid var(--border-default); border-radius: var(--radius-md); background: var(--bg-input); color: var(--text-primary); font-size: 13px; transition: border-color var(--t-fast), box-shadow var(--t-fast); }
