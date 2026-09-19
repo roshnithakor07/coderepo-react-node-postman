@@ -1,10 +1,16 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export function SaveRequestModal({ request, collections, onClose, onSave }) {
 	const [name, setName] = useState(request?.name || `${request?.method || "GET"} ${request?.url || ""}`.slice(0, 80).trim());
 	const [collectionId, setCollectionId] = useState(collections[0]?._id || "");
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState("");
+
+	useEffect(() => {
+		const handler = e => { if (e.key === "Escape") onClose(); };
+		document.addEventListener("keydown", handler);
+		return () => document.removeEventListener("keydown", handler);
+	}, [onClose]);
 
 	async function handleSave() {
 		if (!name.trim()) return setError("Request name is required.");

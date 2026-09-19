@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 function VariableEditor({ variables, onChange }) {
 	const update = (i, f, v) => onChange(variables.map((x, idx) => (idx === i ? { ...x, [f]: v } : x)));
@@ -28,6 +28,12 @@ export function EnvironmentsModal({ environments, onClose, onCreate, onUpdate, o
 	const [newName, setNewName] = useState("");
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState("");
+
+	useEffect(() => {
+		const handler = e => { if (e.key === "Escape") onClose(); };
+		document.addEventListener("keydown", handler);
+		return () => document.removeEventListener("keydown", handler);
+	}, [onClose]);
 
 	function selectEnv(env) { setSelected(env); setEditName(env.name); setEditVars(env.variables || []); setCreating(false); setError(""); }
 	function startCreate() { setSelected(null); setCreating(true); setNewName(""); setEditVars([]); setError(""); }

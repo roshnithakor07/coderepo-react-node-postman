@@ -1024,3 +1024,37 @@ branch=main
 repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
 worktree=main
 parent_agent=none
+
+---
+
+## [2026-09-19T12:17:21+00:00] Added Escape-to-close for EnvironmentsModal and SaveRequestModal (Phase A)
+
+User Prompt (verbatim, secrets redacted):
+"Implement ONLY the second approved Phase A change: ESCAPE-TO-CLOSE FOR MODALS ... Approved behavior: When either modal is open, pressing Escape closes that modal. Existing click-outside behavior must remain unchanged. Existing close buttons must remain unchanged ... Escape must NOT submit forms. Escape must NOT trigger unrelated application actions ... FIRST inspect both modal implementations and their existing event/listener patterns ... Use the smallest safe implementation consistent with the existing React patterns ... Do NOT commit or push yet."
+
+Agent Response Summary:
+Inspected both modal implementations before writing anything, and specifically looked for an existing "close on external interaction" pattern to mirror rather than inventing a new style — found one already in the codebase: Sidebar.jsx's CollectionMenu component uses `useEffect` + `document.addEventListener("mousedown", handler)` + a cleanup function returning `removeEventListener`, dependency array `[onClose]`. Mirrored this exact pattern in both EnvironmentsModal.jsx and SaveRequestModal.jsx, substituting a "keydown" listener that checks `e.key === "Escape"`.
+
+Confirmed via grep that neither modal wraps its inputs in an HTML `<form>` element (both use plain `<input>`/`<select>` with button `onClick` handlers, not `onSubmit`) — so there was never any native form-submit behavior for Escape to interfere with; no `preventDefault()` was needed for that concern. Confirmed via diff that the existing click-outside handler (`modal-overlay`'s inline onClick) and the close button (`modal-close`, onClick={onClose}) are both completely untouched in both files — only an import line and one new useEffect block were added to each, nothing else in either component was modified.
+
+Lifecycle correctness: because both modal components only exist in the React tree while their parent boolean (showEnvs / showSave in App.jsx) is true, the useEffect naturally only runs while the modal is mounted and its cleanup runs on unmount (i.e. exactly when the modal closes) — this is the same mount-scoped lifecycle the pre-existing CollectionMenu pattern already relies on, so no new lifecycle reasoning was introduced. The onClose prop passed from App.jsx is a fresh inline arrow function on every App re-render (same as CollectionMenu's onClose prop already is), so the effect's dependency array causes it to clean up and re-add the listener slightly more often than strictly necessary during background re-renders — but cleanup always removes the previous listener before a new one is added, so this cannot accumulate duplicate listeners; it is the exact same tradeoff the existing, already-working pattern already makes, not a new risk.
+
+Verified the new handler logic with a framework-free simulation (Node/Bun's built-in EventTarget standing in for `document`, no jsdom, no new dependency) that manually drove the effect's mount/cleanup lifecycle: Escape triggers onClose while mounted, other keys do not, cleanup genuinely removes the listener (no leak after close), remounting after a close does not accumulate duplicate listeners, and a stale onClose reference from a prior effect run is never invoked after cleanup. All 6 assertions passed. This is a real behavioral test of the exact code added, not just a code read.
+
+Actions:
+* Read frontend/src/features/workspace/Sidebar.jsx's CollectionMenu to identify the existing event-listener pattern to mirror
+* Confirmed via grep that neither EnvironmentsModal.jsx nor SaveRequestModal.jsx contains a <form> element
+* Edited frontend/src/features/environments/EnvironmentsModal.jsx — added useEffect import and an Escape-keydown effect (mirroring CollectionMenu's pattern)
+* Edited frontend/src/features/collections/SaveRequestModal.jsx — identical addition
+* Framework-free Bun verification script (EventTarget-based, not committed, deleted after use) — 6/6 checks passed covering Escape-closes, other-keys-ignored, cleanup-removes-listener, no-duplicate-on-remount, and stale-closure safety
+* grep confirmed the existing modal-overlay click-outside handler and modal-close button are unchanged in both files
+* bun test (backend, 21 pass — unaffected, frontend-only change)
+* cd frontend && bun run build (clean, 33 modules)
+* git diff/status reviewed: only the two modal files changed (+14/-2 total), project.txt remains untracked and untouched
+
+Context:
+tool=Claude Code
+branch=main
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
+worktree=main
+parent_agent=none
