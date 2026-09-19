@@ -1,6 +1,3 @@
-import { useState } from "react";
-import { getTheme, setTheme } from "../../shared/utils/theme.js";
-
 function BrandIcon() {
 	return (
 		<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -12,13 +9,6 @@ function BrandIcon() {
 }
 
 export function AppHeader({ account, environments, sidebarCollapsed, onToggleSidebar, onEnvChange, onOpenEnvs, onLogout }) {
-	const [theme, setThemeState] = useState(getTheme());
-
-	function toggleTheme() {
-		const next = theme === "dark" ? "light" : "dark";
-		setTheme(next); setThemeState(next);
-	}
-
 	const activeEnv = environments.find(e => e.isActive);
 	const initials = account?.name?.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase() || "?";
 
@@ -54,10 +44,6 @@ export function AppHeader({ account, environments, sidebarCollapsed, onToggleSid
 				</div>
 
 				<div className="header-divider" aria-hidden="true" />
-
-				<button className="icon-btn theme-btn" onClick={toggleTheme} title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}>
-					{theme === "dark" ? "☀" : "☾"}
-				</button>
 
 				<div className="account-chip" title={account?.email}>
 					<div className="account-avatar">{initials}</div>

@@ -13,9 +13,6 @@ import { ResponseViewer } from "./features/response-viewer/ResponseViewer.jsx";
 import { AppHeader } from "./features/workspace/AppHeader.jsx";
 import { Sidebar } from "./features/workspace/Sidebar.jsx";
 import { hasSessionToken, setSessionToken } from "./shared/api/client.js";
-import { applyStoredTheme } from "./shared/utils/theme.js";
-
-applyStoredTheme();
 
 const DEFAULT_REQUEST = { method: "GET", url: "", params: [], headers: [], body: "", bodyType: "none", auth: { type: "none" } };
 

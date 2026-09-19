@@ -59,7 +59,7 @@ coderepo-react-node-postman/
 │   │   │   └── workspace/       # App header and sidebar
 │   │   ├── shared/
 │   │   │   ├── api/             # Fetch-based API client
-│   │   │   └── utils/           # Formatting helpers and theme
+│   │   │   └── utils/           # Formatting helpers
 │   │   ├── App.jsx              # Root component
 │   │   ├── main.jsx             # React entry point
 │   │   └── styles.css           # Complete CSS design system
