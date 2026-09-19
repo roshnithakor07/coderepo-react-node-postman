@@ -957,3 +957,70 @@ branch=main
 repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
 worktree=main
 parent_agent=none
+
+---
+
+## [2026-09-19T12:02:01+00:00] Full UI/UX audit for post-submission polish (READ-ONLY, no code changed)
+
+User Prompt (verbatim, secrets redacted):
+"We have finished and pushed the dark-only theme change ... Now we want to improve the product's UI/UX while the submitted project is waiting for review. IMPORTANT: This is a READ-ONLY AUDIT. Do NOT modify code, CSS, seed data, tests, README, dependencies, or configuration. Do NOT commit or push. PRIMARY GOAL: We want the application to feel like a professional, polished API client ... while remaining strictly within the HackerRank assignment requirements." Ten-step structure: (1) read project.txt/AGENTS.md/acceptance criteria, (2) audit the current app across every listed surface, (3) identify what already works well, (4) identify genuine weaknesses, (5) product identity findings (do not reproduce Postman's branding), (6) three-tier redesign priorities (high-value/low-risk, medium-risk, avoid), (7) explicitly preserve the 8 existing core capabilities plus the local-sandbox/no-external-dependency/current-architecture decisions, (8) reviewer-experience walkthrough, (9) responsive/accessibility review, (10) phased implementation plan (not implemented). Full 14-point final report requested, documentation-only, STOP after the audit.
+
+Agent Response Summary:
+Read project.txt in full (an untracked file at the repo root — confirmed via git status it has never been part of git history, is not covered by .gitignore, and was recreated very recently; this is exactly why every commit step in this session has explicitly excluded it — noted this plainly in the report as a submission-hygiene reminder, not a code finding). Its acceptance criteria match REQUIREMENTS.md/GUIDELINES.md/AGENTS.md exactly (already deeply read earlier in this session, confirmed still unmodified via git log), so no new requirement was discovered — the explicit UI/UX bar is "modern, sleek, and polished," 5-10 core capabilities, end-to-end functionality, human judgment, clean build, current dependencies, and the sample-repo structure.
+
+Re-read every frontend component fresh rather than relying on earlier-session memory, since AppHeader.jsx, styles.css, Sidebar.jsx, RequestBuilder.jsx, and App.jsx all materially changed during this session (dark-only theme, Params<->URL sync, race-condition guard, sidebar default-expand, loading bar). Read App.jsx, AppHeader.jsx, Sidebar.jsx, RequestBuilder.jsx, ResponseViewer.jsx, WorkspaceLogin.jsx, EnvironmentsModal.jsx, SaveRequestModal.jsx, KeyValueEditor.jsx, AuthPanel.jsx, and the complete current styles.css (440 lines, post light-theme-removal).
+
+One concrete, precisely-traced finding: the responsive block's `.app-shell { grid-template-columns: 0 1fr; }` at max-width:768px has equal CSS specificity to, and comes after in source order, the base `.app-shell` rule — confirmed via grep that no other rule overrides this — so the sidebar is unconditionally forced to zero width at that breakpoint regardless of the sidebarCollapsed toggle state. The hamburger/sidebar-toggle button remains clickable and updates React state correctly, but produces no visible change at <=768px: Collections/History become completely inaccessible on any narrower-than-tablet viewport. This is a real, reviewer-discoverable bug, not a matter of taste.
+
+Also traced: icon-only buttons generally do have aria-label/title coverage (sidebar-toggle, env-manage, collection menu, kv-del-btn, modal-close, env-del-btn all confirmed); neither modal component (EnvironmentsModal, SaveRequestModal) has an Escape-key handler, only click-outside-to-close; the save-btn's title still references a non-existent "(S)" keyboard shortcut (a pre-existing LOW item from the original audit, still unresolved); the product's in-app branding says "Postman Clone" in four places (AppHeader, WorkspaceLogin, AppBoot, index.html title) using an original (non-Postman) SVG mark, which is not a trademark risk but is a real "own professional identity" opportunity per the user's Step 5 ask — explicitly distinguished this from the repository's own name (coderepo-react-node-postman), which GUIDELINES.md's own naming convention requires to stay as-is and should not be touched.
+
+Delivered the full 14-point report directly in chat: requirements recap, current strengths, weaknesses (led with the sidebar breakpoint bug), product identity findings (with the repo-name-vs-display-name distinction made explicit), reviewer-experience walkthrough, responsive/accessibility findings, three-tier prioritized improvement list, and a six-phase implementation plan with per-phase scope/risk/verification — no code implemented, no files besides this transcript touched.
+
+Actions:
+* Read project.txt (untracked, root-level assignment brief) — confirmed via `git status`/`git ls-files` it is not tracked and not gitignored
+* Re-read frontend/src/App.jsx, AppHeader.jsx, Sidebar.jsx, RequestBuilder.jsx, ResponseViewer.jsx, WorkspaceLogin.jsx, EnvironmentsModal.jsx, SaveRequestModal.jsx, KeyValueEditor.jsx, AuthPanel.jsx, and the full current styles.css (440 lines)
+* grep -n "app-shell|sidebar-collapsed" frontend/src/styles.css — confirmed the exact 4 rules governing the responsive sidebar bug, no other override exists
+* No files modified
+
+Context:
+tool=Claude Code
+branch=main
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
+worktree=main
+parent_agent=none
+
+---
+
+## [2026-09-19T12:07:42+00:00] Fixed the responsive sidebar-toggle bug (Phase A, CSS-only)
+
+User Prompt (verbatim, secrets redacted):
+"Implement ONLY the first approved Phase A change: FIX THE RESPONSIVE SIDEBAR BUG ... Expected behavior: Desktop behavior must remain exactly unchanged. At <=768px, the sidebar should be hidden by default. Clicking the existing hamburger/sidebar toggle should make the sidebar visible. Clicking the toggle again should hide it ... FIRST inspect the existing Sidebar.jsx/App.jsx state flow and styles.css media query so the fix uses the existing sidebar toggle state rather than introducing duplicate state. Prefer the smallest possible CSS/React change ... Do NOT commit or push yet."
+
+Agent Response Summary:
+Re-confirmed the state flow before touching anything: App.jsx already holds `sidebarCollapsed` (useState(false)) and toggles it via the existing hamburger button (AppHeader's onToggleSidebar), applied to the DOM as a `.sidebar-collapsed` class on `.app-shell`. This existing state/class is exactly what's needed — no new React state was introduced.
+
+Root cause (already traced during the read-only audit, re-verified here): inside `@media (max-width: 768px)`, `.app-shell { grid-template-columns: 0 1fr; }` has the same CSS specificity as the base (non-media) `.app-shell` rule, and comes later in source order, so it always wins regardless of whether `.sidebar-collapsed` is present — the toggle updates React state correctly but the sidebar's rendered width never changes at that breakpoint.
+
+Fix: two lines added inside the same media query, reusing the identical mechanism the desktop collapse already relies on (class presence -> higher/tied specificity -> source-order tie-break): `.app-shell.sidebar-collapsed { grid-template-columns: 260px 1fr; }` and `.app-shell.sidebar-collapsed .sidebar { width: 260px; border-right: 2px solid var(--border-default); }`. This inverts the *meaning* of the existing class at this breakpoint only (absent = hidden, present = visible) without touching the class's meaning at desktop widths, since the new rules only exist inside the media query and never match above 768px. The existing `sidebarCollapsed` default of `false` now correctly reads as "hidden" at narrow widths and "visible" at desktop widths simultaneously, with zero JS changes.
+
+Why minimal: exactly 2 lines added, 0 lines removed, 0 React/JS files touched, 0 new state, 0 new dependencies. Verified via the actual compiled production CSS bundle (not just source) that the minifier preserved the same rule order needed for the source-order tie-break to resolve correctly — this is a deterministic, spec-based verification (CSS specificity and source order are not ambiguous), not a guess. Traced both toggle states (collapsed/not) at both breakpoint ranges (desktop unaffected since the media query never matches; mobile hidden-by-default and toggle-reveals, confirmed algebraically via specificity tuples).
+
+Attempted a live dev-server smoke check (no compile/runtime errors); could not perform an actual visual/interactive resize check in this sandbox for the same disclosed reason as earlier in this session (no working browser-automation tool available). Confidence rests on the deterministic CSS cascade trace against the real compiled bundle, which is a stronger guarantee for a pure-CSS specificity fix than a single manual screenshot would be, but I want to be explicit that no pixels were actually observed.
+
+No Escape-to-close, tooltip, ResponseViewer, rename, or navigation work was performed — strictly this one fix.
+
+Actions:
+* Re-confirmed frontend/src/App.jsx's existing sidebarCollapsed state and AppHeader's onToggleSidebar wiring (no changes needed there)
+* Edited frontend/src/styles.css — added 2 lines inside the existing `@media (max-width: 768px)` block only
+* grep the compiled dist CSS bundle to confirm the minifier preserved source order for the new rules relative to their base counterparts
+* bun test (backend, 21 pass — unaffected, CSS-only change)
+* cd frontend && bun run build (clean, 33 modules)
+* Started the frontend dev server alone to confirm no compile/runtime errors; stopped afterward
+* git diff/status reviewed: only frontend/src/styles.css changed (+2 lines), nothing else
+
+Context:
+tool=Claude Code
+branch=main
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
+worktree=main
+parent_agent=none

@@ -435,6 +435,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 /* ─── Responsive ─── */
 @media (max-width: 768px) {
   .app-shell { grid-template-columns: 0 1fr; }
+  .app-shell.sidebar-collapsed { grid-template-columns: 260px 1fr; }
+  .app-shell.sidebar-collapsed .sidebar { width: 260px; border-right: 2px solid var(--border-default); }
   .save-btn { display: none; }
   .env-selector label { display: none; }
   .account-chip span { display: none; }
