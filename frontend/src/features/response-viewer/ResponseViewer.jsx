@@ -1,18 +1,28 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { statusClass, formatSize, formatTime, tryFormatJson } from "../../shared/utils/format.js";
 
-function SnippetPanel({ onGenerateSnippet }) {
+function SnippetPanel({ request, activeEnvironmentId, onGenerateSnippet }) {
 	const [lang, setLang] = useState("curl");
 	const [snippet, setSnippet] = useState("");
 	const [loading, setLoading] = useState(false);
 	const [copied, setCopied] = useState(false);
+	const generationRef = useRef(0);
 
-	async function generate(l) {
-		setLang(l); setLoading(true);
-		try { const r = await onGenerateSnippet(l); setSnippet(r?.snippet || ""); }
-		catch { setSnippet("// Failed to generate snippet."); }
-		finally { setLoading(false); }
-	}
+	// Regenerates whenever the selected language, the request itself (new
+	// object identity on every field edit, see App.jsx's updateRequest), or
+	// the active environment changes — not just on a language-button click —
+	// so the displayed snippet never goes stale relative to the request.
+	// onGenerateSnippet is deliberately not a dependency: it's a fresh
+	// function every render, and request/activeEnvironmentId already capture
+	// every change that should trigger a regeneration.
+	useEffect(() => {
+		const generation = ++generationRef.current;
+		setLoading(true);
+		onGenerateSnippet(lang)
+			.then((r) => { if (generationRef.current === generation) setSnippet(r?.snippet || ""); })
+			.catch(() => { if (generationRef.current === generation) setSnippet("// Failed to generate snippet."); })
+			.finally(() => { if (generationRef.current === generation) setLoading(false); });
+	}, [lang, request, activeEnvironmentId]);
 
 	async function copy() {
 		try { await navigator.clipboard.writeText(snippet); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch {}
@@ -22,7 +32,7 @@ function SnippetPanel({ onGenerateSnippet }) {
 		<div className="snippet-panel">
 			<div className="snippet-lang-row">
 				{["curl", "fetch", "axios", "python"].map(l => (
-					<button key={l} className={`snippet-lang-btn ${lang === l ? "active" : ""}`} onClick={() => generate(l)}>{l}</button>
+					<button key={l} className={`snippet-lang-btn ${lang === l ? "active" : ""}`} onClick={() => setLang(l)}>{l}</button>
 				))}
 			</div>
 			{loading && <div className="response-loading"><div className="spinner" /> Generating snippet…</div>}
@@ -45,7 +55,7 @@ function SnippetPanel({ onGenerateSnippet }) {
 
 const TABS = ["Pretty", "Raw", "Headers"];
 
-export function ResponseViewer({ response, sending, onGenerateSnippet }) {
+export function ResponseViewer({ response, sending, request, activeEnvironmentId, onGenerateSnippet }) {
 	const [activeTab, setActiveTab] = useState("Pretty");
 	const [showSnippet, setShowSnippet] = useState(false);
 
@@ -78,7 +88,7 @@ export function ResponseViewer({ response, sending, onGenerateSnippet }) {
 				<div style={{ marginLeft: "auto" }}>{SnippetToggle}</div>
 			</div>
 			{showSnippet
-				? <SnippetPanel onGenerateSnippet={onGenerateSnippet} />
+				? <SnippetPanel request={request} activeEnvironmentId={activeEnvironmentId} onGenerateSnippet={onGenerateSnippet} />
 				: (
 					<div className="response-empty">
 						<div className="response-empty-icon">📡</div>
@@ -114,7 +124,7 @@ export function ResponseViewer({ response, sending, onGenerateSnippet }) {
 			</div>
 
 			{showSnippet
-				? <SnippetPanel onGenerateSnippet={onGenerateSnippet} />
+				? <SnippetPanel request={request} activeEnvironmentId={activeEnvironmentId} onGenerateSnippet={onGenerateSnippet} />
 				: (
 					<>
 						{response.error

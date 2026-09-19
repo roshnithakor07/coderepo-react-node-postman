@@ -307,7 +307,13 @@ export function PostmanWorkspace({ account, onLogout }) {
 						title="Drag to resize"
 					/>
 					<div className="resizable-pane" style={{ flex: `1 1 ${100 - splitterY}%`, minHeight: "140px" }}>
-						<ResponseViewer response={response} sending={sending} onGenerateSnippet={handleGenerateSnippet} />
+						<ResponseViewer
+							response={response}
+							sending={sending}
+							request={request}
+							activeEnvironmentId={environments.find((e) => e.isActive)?._id}
+							onGenerateSnippet={handleGenerateSnippet}
+						/>
 					</div>
 				</div>
 			</main>
