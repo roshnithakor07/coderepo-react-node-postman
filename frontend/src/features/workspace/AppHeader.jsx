@@ -19,7 +19,7 @@ export function AppHeader({ account, environments, sidebarCollapsed, onToggleSid
 			</button>
 			<div className="header-brand">
 				<div className="brand-icon"><BrandIcon /></div>
-				<span><em>Postman</em> Clone</span>
+				<span>Reqway</span>
 			</div>
 			<div className="header-divider" aria-hidden="true" />
 

@@ -24,7 +24,7 @@ export function WorkspaceLogin({ error, loading, onLogin }) {
 			<div className="login-card">
 				<div className="login-brand">
 					<div className="brand-icon"><BrandIcon /></div>
-					<span>Postman Clone</span>
+					<span>Reqway</span>
 				</div>
 				<h1>Welcome back</h1>
 				<p>Sign in to your workspace to continue.</p>

@@ -29,10 +29,10 @@ function BrandIcon() {
 
 function AppBoot() {
 	return (
-		<div className="app-boot" aria-label="Loading Postman Clone" role="status">
+		<div className="app-boot" aria-label="Loading Reqway" role="status">
 			<div className="app-boot-brand">
 				<div className="brand-icon"><BrandIcon /></div>
-				<span>Postman Clone</span>
+				<span>Reqway</span>
 			</div>
 			<div className="app-boot-progress" aria-hidden="true"><span /></div>
 		</div>

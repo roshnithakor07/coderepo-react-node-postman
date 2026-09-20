@@ -1,4 +1,4 @@
-# Postman Clone
+# Reqway
 
 A full-stack Postman-inspired API client that lets developers compose, send, organize, and analyze HTTP requests — built on the MERN stack with a dark-first design system.
 

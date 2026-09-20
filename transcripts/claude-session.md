@@ -1474,3 +1474,84 @@ branch=main
 repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
 worktree=main
 parent_agent=none
+
+---
+
+## [2026-09-20T12:13:58+00:00] Read-only investigation: user-visible "Postman Clone" branding occurrences (no code changed)
+
+User Prompt (verbatim, secrets redacted):
+"Now perform ONLY a READ-ONLY investigation for the next UI/UX improvement: replacing the user-facing 'Postman Clone' product branding. Do NOT modify any files. Do NOT commit. Do NOT push." Requested inspection of frontend/index.html, App.jsx, WorkspaceLogin.jsx, AppHeader.jsx, and any other user-visible occurrence; explicit exclusions (repo name, package.json names, internal component names, API routes, database names, folder names, git history, project.txt); verification of whether the existing SVG brand icon is original and should stay; a report of exact file+location, current text, rename recommendation, related text that should stay unchanged, functional impact, and minimal file-change scope; mandatory transcript/log documentation of this investigation; README left unchanged unless materially necessary; no Claude attribution anywhere; final git status confirmation of no code changes.
+
+Agent Response Summary:
+Re-ran the branding search fresh against current HEAD (03b7f86, post shadow-fix) to confirm nothing has drifted since the prior investigation. Confirmed exactly 5 user-visible occurrences of "Postman Clone"/"Postman", identical to the earlier findings: frontend/index.html:7 (`<title>Postman Clone</title>`), App.jsx:32 (`aria-label="Loading Postman Clone"` on the boot screen), App.jsx:35 (`<span>Postman Clone</span>` boot screen text), WorkspaceLogin.jsx:27 (`<span>Postman Clone</span>` login card text), AppHeader.jsx:22 (`<span><em>Postman</em> Clone</span>` header text, with "Postman" italicized). No dynamic `document.title` assignment exists anywhere (only the static `<title>` tag), and no test file (frontend or backend) references the string "Postman Clone" — confirmed zero functional/test impact from changing it.
+
+Also found two additional non-UI occurrences, correctly out of scope per the user's own exclusions: `App.jsx:42`'s `PostmanWorkspace` function/component name (an internal JS identifier, never rendered) and `backend/package.json:6`'s `"description": "Postman Clone API"` (package metadata, not runtime UI) — grouped with the already-excluded package.json `name` fields (`postman-frontend`, `postman-backend`, root `coderepo-react-node-postman`) and the repository directory name itself. None of these would be touched even if a rename is approved, per the user's explicit instructions.
+
+Confirmed the brand icon is original and unrelated to Postman's actual logo: a simple inline SVG (circle + centered dot + diagonal line, read as a stylized radar/compass/send glyph) duplicated with minor stroke-width/radius variance across App.jsx, WorkspaceLogin.jsx, and AppHeader.jsx's separate `BrandIcon()` components, plus a related but distinct `frontend/public/favicon.svg` (solid orange circle background with the same glyph motif). No other logo/brand asset files exist in the repo. Recommended (not applied) that this icon remain unchanged, consistent with the user's stated preference.
+
+Noted one related-but-out-of-scope finding for awareness only: README.md's H1 title ("# Postman Clone") and its opening description would become inconsistent with the in-app UI if a rename is later approved and applied, but the user's own instruction was "do not modify README unless materially necessary," and this task is investigation-only regardless — left entirely untouched, flagged as a decision to make at actual-implementation time, not now.
+
+Recommended minimal file-change scope, if a rename is approved in a future task: exactly the same 4 files identified in the prior investigation — `frontend/index.html`, `frontend/src/App.jsx`, `frontend/src/features/auth/WorkspaceLogin.jsx`, `frontend/src/features/workspace/AppHeader.jsx` — a pure text-content swap in 5 locations, no logic/structure/icon changes.
+
+Made no changes. Delivered the full report directly in chat and confirmed via git status that the working tree is unchanged except the pre-existing untracked project.txt.
+
+Actions:
+* grep -rn "Postman" across frontend/src, frontend/index.html, frontend/public (excluding node_modules) — confirmed the same 5 user-visible occurrences as the prior investigation, no drift
+* grep -rn "document.title|<title>|meta name=\"description\"|og:" across frontend/ — confirmed no dynamic title-setting code exists
+* grep -rln "Postman Clone" across all *.test.js files (frontend and backend) — confirmed zero test references, zero functional impact from a rename
+* Read frontend/public/favicon.svg and all three BrandIcon() SVG definitions — confirmed the icon is an original design, unrelated to Postman's real logo
+* grep -n "Postman Clone" README.md and backend/package.json — found 2 additional non-UI/out-of-scope occurrences (README H1, package description), noted but not modified
+* git status --short / git rev-parse HEAD — confirmed no files modified, HEAD unchanged at 03b7f86
+* No files modified, no commit, no push
+
+Context:
+tool=Claude Code
+branch=main
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
+worktree=main
+parent_agent=none
+
+---
+
+## [2026-09-20T12:20:15+00:00] Implemented the product-name change: "Postman Clone" -> "Reqway" (not committed)
+
+User Prompt (verbatim, secrets redacted):
+"The branding investigation is approved. Use the new user-facing product name: Reqway. Implement ONLY this product-name change." Specified the exact 5 occurrences to change (frontend/index.html title, App.jsx boot aria-label + boot text, WorkspaceLogin.jsx login text, AppHeader.jsx header text), explicitly preserving the existing brand icon exactly as-is, and explicitly excluding repository name, package.json names, internal component/function names (e.g. PostmanWorkspace), API routes, database names, folder names, architecture, and new dependencies. README instruction: search for "Postman Clone" and update only branding references that would now be materially inconsistent with the UI, otherwise leave untouched. Required verification (remaining-reference search, unintended-rename check, bun test, frontend build, git diff --check, manual browser check of tab/boot/login/header text + icon + desktop/~700px/~400px layout), mandatory transcript/log documentation, and an explicit instruction not to commit/push yet and not to add any Claude/Anthropic attribution.
+
+Agent Response Summary:
+Made exactly the 5 approved text-content edits, each a single-string swap with no structural change: frontend/index.html:7 title -> "Reqway"; App.jsx:32 aria-label -> "Loading Reqway"; App.jsx:35 boot-screen span -> "Reqway"; WorkspaceLogin.jsx:27 login-brand span -> "Reqway"; AppHeader.jsx:22 header-brand span -> "Reqway" (previously `<em>Postman</em> Clone` with the first word italicized — the em-tag styling was removed along with the old text since the new one-word name has no natural word split to italicize, which is the smallest faithful adaptation of the existing pattern rather than an arbitrary style change). All three BrandIcon() SVG definitions were left completely untouched, confirmed byte-identical via the same grep used in the investigation.
+
+Checked README.md for "Postman Clone" — found exactly one occurrence, the H1 title (`# Postman Clone`), which is genuine user-facing product-name branding that would now be materially inconsistent with the UI (title bar, login, header, and boot screen would all say "Reqway" while the README's own top-level heading still said the old name) — updated only that line to `# Reqway`. Left the immediately-following descriptive sentence ("A full-stack Postman-inspired API client...") untouched, since "Postman-inspired" is a factual description of what the app is modeled on, not a branding/name reference, and the instruction was to update only branding references.
+
+VERIFICATION: grep across frontend/index.html and frontend/src confirmed zero remaining "Postman Clone" occurrences; the only remaining "Postman" match is the internal `PostmanWorkspace` function name (App.jsx:42, 422), correctly untouched per the explicit exclusion. Confirmed via grep that all three package.json "name" fields (postman-frontend, postman-backend, coderepo-react-node-postman) and the repository directory name are unchanged. bun test (backend) — 21/21 pass, unaffected. cd frontend && bun run build — 34 modules, 0 errors; build artifact removed afterward. git diff --check — clean, no whitespace errors.
+
+Real browser verification via scratch Playwright/Chromium (not a product dependency), against the live running app: 19/19 automated assertions passed across three viewport widths (1440px/700px/400px) — browser tab title is exactly "Reqway" both before and after login, login-screen brand text is "Reqway", header brand text is "Reqway" after logging in, and no horizontal overflow was introduced at any width on either the login page or the main workspace (expected, since box-shadow/text-content changes don't affect layout, and "Reqway" is shorter than "Postman Clone" so if anything header crowding is reduced). The boot screen (only shown while a stored session token is being re-validated on load) doesn't normally stay visible long enough to screenshot under fast local conditions, so it was verified with a second, targeted check: logged in once to establish a session token, then reloaded the page with the session-verification network call deliberately delayed via Playwright route interception (a test-only technique, nothing in the app's own code was slowed), confirming the boot screen renders with text "Reqway" and aria-label "Loading Reqway" while visible. Screenshots were taken and visually reviewed for login (1440px), workspace (1440px/700px/400px), and the captured boot screen — all show "Reqway" with the original icon unchanged and no layout regression at narrow widths (existing pre-change responsive behavior, e.g. the header row's existing element-hiding at <=768px, was unaffected).
+
+No data mutation occurred during verification (login only, no Send/Save/delete actions performed in any script), so no database reseed was necessary.
+
+Made exactly the approved change (5 UI text locations + 1 README heading). Delivered the full implementation/verification report directly in chat and is waiting for approval before committing. No Claude/Anthropic attribution was added anywhere.
+
+Actions:
+* Edited frontend/index.html — <title> text
+* Edited frontend/src/App.jsx — boot-screen aria-label and visible span text
+* Edited frontend/src/features/auth/WorkspaceLogin.jsx — login-brand span text
+* Edited frontend/src/features/workspace/AppHeader.jsx — header-brand span text (removed the now-inapplicable <em> split)
+* Edited README.md — H1 title only ("# Postman Clone" -> "# Reqway"); left the "Postman-inspired" descriptive sentence untouched
+* grep -rn "Postman Clone"/"Postman" across frontend/index.html and frontend/src — confirmed zero remaining user-visible occurrences, only the untouched internal PostmanWorkspace identifier remains
+* grep -n '"name"' across all 3 package.json files — confirmed unchanged
+* Confirmed all 3 BrandIcon() SVG definitions byte-identical to before
+* cd backend && bun test — 21/21 pass, unaffected
+* cd frontend && bun run build — 34 modules, 0 errors; removed the dist/ artifact afterward
+* git diff --check — clean
+* Real-browser verification via scratch Playwright/Chromium — 19/19 assertions across tab title, login text, header text, and no-horizontal-overflow at 1440px/700px/400px, both logged-out and logged-in
+* Separately verified the boot screen's text/aria-label by re-establishing a session token then delaying the session-verification network call (test-only technique) to keep the boot screen visible long enough to capture
+* Captured and visually reviewed screenshots of login, workspace (3 widths), and the boot screen
+* Removed scratch Playwright tooling from the session scratchpad
+* Did not commit or push; no Claude/Anthropic attribution added anywhere
+
+Context:
+tool=Claude Code
+branch=main
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
+worktree=main
+parent_agent=none
