@@ -1438,3 +1438,39 @@ branch=main
 repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
 worktree=main
 parent_agent=none
+
+---
+
+## [2026-09-20T12:03:29+00:00] Shadow/elevation polish — removed permanent orange glow from primary buttons at rest (not committed)
+
+User Prompt (verbatim, secrets redacted):
+"Proceed with ONLY the shadow/elevation improvement. Do NOT change the product name yet. Do NOT change any 'Postman Clone' text yet." Approved scope from the prior investigation: existing neutral shadow tokens (--shadow-md/lg/xl) are correct and untouched; the only issue is .login-submit, .send-btn, and .btn-primary having permanent hardcoded orange box-shadows at rest. Required: no strong permanent glow at rest, a subtle orange hover glow remains, keyboard focus indication stays clearly visible, pressed/active behavior preserved unless directly conflicting, smallest possible CSS-only change, reuse the design system, and if a shared brand-interaction shadow token is useful introduce only that one token (e.g. --shadow-brand-hover) rather than a larger system. Explicitly out of scope: modal/dropdown/login-card shadows, sidebar/header elevation, response/snippet surfaces, colors globally, typography, icons, layout, responsive architecture, Snippets, backend/API/DB/auth, dependencies, and any "Postman Clone" text. Required browser verification across login, main workspace, other primary buttons, secondary buttons, modals/dropdowns, dark theme, and 3 viewport widths (desktop/~700px/~400px), plus bun test, frontend build, and git diff --check. Explicit standing instruction restated: no Co-Authored-By trailer on any future commit — must use only Roshni's Git identity (this task made no commit, so nothing to apply this to yet, but noted for the next approval).
+
+Agent Response Summary:
+Made exactly the approved change in frontend/src/styles.css. Added one new token, --shadow-brand-hover: 0 3px 10px rgba(255,108,55,0.35), placed alongside the existing --shadow-md/lg/xl tokens (all left unchanged). Removed the permanent base box-shadow declaration entirely from .login-submit, .send-btn, and .btn-primary (previously three different hardcoded rgba(255,108,55,...) values at 0.3-0.4 opacity, always present regardless of interaction state), so all three now have no box-shadow at rest. Replaced each of their :hover rules' previously-distinct hardcoded box-shadow values with the single shared var(--shadow-brand-hover) token, consolidating three arbitrary duplicated values into one reusable one. Left :active (translateY reset) and :disabled rules untouched on all three, since none of them conflicted with the rest-state requirement. Did not touch the pre-existing global button:focus-visible rule (outline: 2px solid var(--brand); outline-offset: 2px) — this already provides accessible keyboard-focus indication independently of box-shadow and needed no change. Did not touch .modal, .dropdown-menu, .login-card, sidebar/header borders, or any response/snippet surface — all confirmed unchanged in the diff.
+
+VERIFICATION: bun test (backend) — 21/21 pass, unaffected (CSS-only change). cd frontend && bun run build — 34 modules, 0 errors; build artifact removed afterward. git diff --check — clean, no whitespace errors. Real browser verification via scratch Playwright/Chromium (not a product dependency): 14/14 assertions passed. Confirmed via getComputedStyle at each state: .login-submit/.send-btn/.btn-primary all report box-shadow: none at rest and the new var(--shadow-brand-hover) value on hover; keyboard Tab-navigation reaches the Sign in button and its focus-visible outline (2px solid, brand-derived color) remains present and distinct from both the rest and hover box-shadow states; .login-card and .modal box-shadows remain their original neutral rgba(0,0,0,...) values, unchanged; .btn-ghost (secondary button) shows box-shadow: none both before and after hover, confirming it was never affected. Took before/after screenshots: a clean rest-state screenshot (solid orange button, no ring at all), a clean hover-only screenshot (background lightens to --brand-hover, subtle shadow per the computed-style check, intentionally understated per "subtle" requirement), and a clean keyboard-focus-only screenshot (distinct visible outline ring) — confirmed these three states are visually and programmatically distinguishable, with no lingering glow at rest. Verified no horizontal overflow at 1440px/700px/400px viewports on the login page (box-shadow changes don't participate in layout, so this was a sanity check rather than an expected risk).
+
+No real data mutation occurred during verification (only hover/focus/click-to-select interactions on non-destructive UI — no Send, no Save, no delete actions were performed), so no database reseed was necessary.
+
+README.md: left unchanged, as instructed (no product-name or documented-behavior claim was touched).
+
+Made exactly the one approved, scoped change. Delivered the full report directly in chat and is waiting for approval before committing.
+
+Actions:
+* Edited frontend/src/styles.css — added --shadow-brand-hover token; removed the permanent rest-state box-shadow from .login-submit, .send-btn, .btn-primary; consolidated their :hover box-shadow values onto the shared token
+* cd backend && bun test — 21/21 pass, unaffected
+* cd frontend && bun run build — 34 modules, 0 errors; removed the dist/ artifact afterward
+* git diff --check — clean
+* Real-browser verification via scratch Playwright/Chromium — 14/14 assertions across rest/hover/focus states on all 3 affected buttons, unaffected secondary button, unaffected modal/login-card shadows, and 3 responsive widths
+* Captured and visually reviewed clean rest/hover/focus screenshots of the login Sign in button, plus the Send button and Environments modal
+* Removed scratch Playwright tooling from the session scratchpad
+* Did not commit or push
+* No product-name text ("Postman Clone") was touched anywhere
+
+Context:
+tool=Claude Code
+branch=main
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
+worktree=main
+parent_agent=none
