@@ -21,7 +21,6 @@ export function AppHeader({ account, environments, sidebarCollapsed, onToggleSid
 				<div className="brand-icon"><BrandIcon /></div>
 				<span>Reqway</span>
 			</div>
-			<div className="header-divider" aria-hidden="true" />
 
 			<div className="header-actions">
 				<div className="env-selector">
