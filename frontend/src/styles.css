@@ -186,7 +186,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px
 .logout-btn:hover { background: var(--bg-hover); color: var(--danger); border-color: var(--danger); }
 
 /* ─── Sidebar ─── */
-.sidebar { overflow: hidden; background: var(--bg-workspace); border-right: 2px solid var(--border-default); display: flex; flex-direction: column; transition: width var(--t-slow) var(--ease); }
+.sidebar { overflow: hidden; background: var(--bg-workspace); border-right: 1px solid var(--border-default); display: flex; flex-direction: column; transition: width var(--t-slow) var(--ease); }
 .app-shell.sidebar-collapsed .sidebar { width: 0; border-right: none; }
 .sidebar-inner { display: flex; flex-direction: column; width: 260px; height: 100%; overflow: hidden; }
 .sidebar-tabs { display: flex; border-bottom: 1px solid var(--border-default); padding: 0 8px; flex-shrink: 0; background: var(--bg-workspace); }
@@ -451,7 +451,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px
 @media (max-width: 768px) {
   .app-shell { grid-template-columns: 0 1fr; }
   .app-shell.sidebar-collapsed { grid-template-columns: 260px 1fr; }
-  .app-shell.sidebar-collapsed .sidebar { width: 260px; border-right: 2px solid var(--border-default); }
+  .app-shell.sidebar-collapsed .sidebar { width: 260px; border-right: 1px solid var(--border-default); }
   .save-btn { display: none; }
   .env-selector label { display: none; }
   .account-chip span { display: none; }

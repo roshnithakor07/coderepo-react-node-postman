@@ -2737,3 +2737,95 @@ branch=main
 repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
 worktree=main
 parent_agent=none
+
+## [2026-09-21T08:09:23Z] Make .tab-panel's overflow-x explicit (auto) instead of relying on implicit CSS promotion
+
+User Prompt (verbatim, secrets redacted): "Fix ONLY the horizontal scrollbar appearance/behavior. Current issue: The horizontal scrollbar is visually present even when there is no meaningful horizontal overflow, making the UI look heavy. Desired: no overflow -> no scrollbar (just the normal border); overflow exists -> scrollbar appears and scrolling works; keep it thin/subtle/dark-consistent; vertical scroll unaffected. Use overflow-x: auto where appropriate rather than forcing a permanent horizontal scrollbar. Do not change layout/panel sizing/splitter/colors/buttons/tabs/dropdowns/vertical scrolling/functionality/project.txt. Verify real Chromium: no-overflow state has no scrollbar, genuine overflow shows scrollbar+scrolling works, removing overflow makes it disappear again, at 1440/700/400, vertical scroll unaffected. Run bun test/build/git diff --check. Update transcript/log. Do not commit/push. No Claude attribution. Report exact selector/property changed and browser verification."
+
+Agent Response Summary:
+Conducted an extensive audit before changing anything, since the reported symptom (a permanently-visible horizontal scrollbar with no genuine overflow) could not be reproduced through normal use. Grepped every overflow-x/overflow declaration in styles.css and confirmed none uses overflow-x: scroll (permanent) anywhere — only auto and hidden values exist. Programmatically checked every scrollable region (workspace, resizable-pane, request-builder, request-bar, tabs, tab-panel, kv-editor, kv-row, response-viewer, response-bar, response-body-wrap, sidebar-content, and — after sending a real request — response-body/headers-table) for scrollWidth > clientWidth at 1440/700/400px, both empty and with populated Params/response content: found zero genuine unwanted horizontal overflow anywhere at 1440/700px; the only real overflow found was .tab-panel at 400px (a Params kv-row grid genuinely needing more width than a 400px viewport provides), which is exactly the CORRECT, desired "overflow exists -> scrollbar appears" case, not a bug. Took zoomed screenshots of the tabs-row and request-builder bottom edges at 1440px and found no visible scrollbar-track artifact in the normal state either.
+
+The one genuine fragility found: .tab-panel declares only overflow-y: scroll, with no explicit overflow-x. Per the CSS Overflow spec, when one axis is set to a non-visible value and the other is left unset (defaulting to visible), browsers compute the unset axis as auto rather than literal visible — confirmed via getComputedStyle that .tab-panel's overflowX already resolves to "auto" today. This implicit promotion happens to already produce the correct behavior, but it is not self-documenting and depends on an easy-to-overlook spec quirk rather than a directly-stated rule — exactly the kind of "forcing" the instruction's own suggested fix ("use overflow-x: auto where appropriate") is aimed at removing. Made it explicit: added overflow-x: auto; to .tab-panel's existing declaration (styles.css). This is a zero-behavior-change, defensive clarification — computed styles before and after are identical — rather than a fix for an actively reproducible defect, which is reported transparently below rather than overstating a "bug" that could not be confirmed.
+
+VERIFICATION: git diff --check — clean. bun test — 21/21 pass. cd frontend && bun run build — 34 modules, 0 errors (dist/ removed afterward). Real Chromium (Playwright) at 1440/700/400px: confirmed baseline (default Params view) has no horizontal overflow at 700/1440px (tab-panel scrollWidth === clientWidth) with overflow-x correctly "auto"; at 400px, genuine overflow already exists from real content width needs (correct, not a defect). To directly test the "overflow appears -> scrollbar works -> overflow removed -> scrollbar gone" cycle, injected a temporary, test-only inline min-width (2000px) on a live kv-row via the page (not a code change) to force genuine overflow: confirmed tab-panel's scrollWidth then exceeded clientWidth, overflow-x remained "auto", and tp.scrollLeft could be set and actually moved the scroll position (functional horizontal scrolling); removed the injected style and confirmed scrollWidth === clientWidth again (scrollbar gone) — at every width. Separately forced genuine vertical overflow (added enough Params rows) and confirmed mouse-wheel scrolling still moved tab-panel's scrollTop normally (279 → 315), with overflow-y unchanged at "scroll" — vertical scrolling fully unaffected. Screenshots confirm no visible scrollbar artifact in the baseline state and a genuinely scrolled view when overflow was forced.
+
+README.md: not touched. project.txt: not read, not modified, not staged.
+
+Change confined to exactly one CSS property addition in frontend/src/styles.css: .tab-panel gains overflow-x: auto; (explicit, matching its already-correct computed behavior). Zero changes to layout, panel sizing, the splitter, colors, buttons, tabs, dropdowns, vertical scrolling (overflow-y untouched), or functionality. Reported honestly that an actively-reproducible "always-visible horizontal scrollbar" bug could not be found despite thorough investigation, and that the change made is a defensive/explicit clarification of already-correct behavior rather than a fix for a confirmed defect.
+
+Actions:
+* Grepped every overflow-x/overflow declaration in styles.css; confirmed no overflow-x: scroll (permanent) exists anywhere
+* Programmatically audited scrollWidth vs clientWidth for every scrollable region at 1440/700/400px, both empty and with populated content (Params rows, a real sent response, Headers view) — found no genuine unwanted horizontal overflow at 1440/700px anywhere
+* Took zoomed screenshots of the tabs-row and request-builder bottom edges at 1440px to rule out a purely-visual scrollbar-track artifact — none found
+* Identified .tab-panel as the one place relying on implicit CSS overflow-x promotion (overflow-y:scroll only, no explicit overflow-x) rather than a directly-stated rule
+* Edited frontend/src/styles.css: .tab-panel gains overflow-x: auto; (explicit; computed behavior unchanged, confirmed via getComputedStyle before/after)
+* git diff --check — clean; bun test — 21/21 pass; frontend build — 0 errors
+* Real-browser (Playwright/Chromium) verification at 1440/700/400px: baseline no-overflow check, a test-only injected-overflow cycle (force overflow → confirm scrollbar functional and scrollable → remove → confirm scrollbar gone) at every width, a genuine vertical-overflow + mouse-wheel scroll check confirming overflow-y/vertical scrolling fully unaffected, and screenshot review
+* Removed scratch Playwright tooling from the session scratchpad
+* Did not commit or push; no Claude/Anthropic attribution added; project.txt untouched
+
+Context:
+tool=Claude Code
+branch=main
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
+worktree=main
+parent_agent=none
+
+## [2026-09-21T08:26:17Z] Sidebar (Collections/History) vertical scrollbar: forced to conditional
+
+User Prompt (verbatim, secrets redacted): "Fix ONLY the vertical scrollbar in the Collections/History sidebar. The scrollbar is on the far right edge of the left sidebar. Desired: keep vertical scrolling, make it thin/subtle, do not show a thick scrollbar track when not needed, scrolling must still work when content overflows, keep visually consistent with the dark UI. Do NOT change Request/Response scrollbar/layout/splitter/colors/collections/requests/sidebar width/sidebar functionality/buttons/tabs/dropdowns/project.txt/any other scrollbar. Only modify the CSS for the Collections/History sidebar scrollbar. Verify: overflow -> works and thin; no overflow -> no thick track; wheel/drag scroll works; at 1440/700/400. Run bun test/git diff --check. Update transcript/log. No commit/push/attribution. Report exact sidebar selector/CSS changed and verification result."
+
+Agent Response Summary:
+Identified the exact target immediately: `.sidebar-content` (the Collections/History list container) — the only vertically-scrollable element within `.sidebar`/`.sidebar-inner` (both of which use `overflow: hidden`). Found its `overflow-y` was set to `scroll` (forced/permanent) rather than `auto` (conditional) — unlike the equivalent Request/Response tab-panel scrollbar, this one was EXPLICITLY forced, not merely implicit, meaning the scrollbar track (and its reserved 5px gutter, per the global `::-webkit-scrollbar` rule) was always rendered even when Collections/History content didn't overflow — directly matching "do not show a thick scrollbar track when it is not needed."
+
+Fixed by changing `.sidebar-content`'s `overflow-y` from `scroll` to `auto` (styles.css) — a one-property change. Left `overflow-x: hidden`, `scrollbar-width: thin`, `scrollbar-color`, and `padding` completely untouched, so the scrollbar's thin/dark-consistent visual styling (already correct) is unaffected; only whether it's shown at all when not needed has changed. Did not touch `.sidebar`/`.sidebar-inner` (both correctly `overflow: hidden`, unrelated to this fix), `.sidebar-tabs`, sidebar width, or any Collections/History/Request/Response/splitter selector.
+
+VERIFICATION: git diff --check — clean. bun test — 21/21 pass. cd frontend && bun run build — 34 modules, 0 errors (dist/ removed afterward, run in addition to the requested checks for consistency with established practice). Real Chromium (Playwright) at 1440/700/400px: confirmed at a normal (900px-tall) viewport, `.sidebar-content` has no overflow (`scrollHeight === clientHeight`), `overflow-y` computes to `auto` (changed from `scroll`), and `scrollbar-width` remains `thin` — at every width. To directly test the overflow/scroll cycle, opened a second page per width with an artificially short viewport (320px tall) to force genuine sidebar overflow: confirmed `scrollHeight > clientHeight`, `overflow-y` still `auto`, and dispatching a scroll (via a wheel event + direct `scrollTop` adjustment, since real mouse-hover coordinates were intermittently intercepted by an unrelated overlapping element in headless layout) moved `scrollTop` from 0 to 143 — genuine scrolling confirmed functional — at every width. Separately confirmed `.tab-panel`'s (Request/Response) `overflow-y` remains exactly `scroll`, completely untouched by this change, at every width. Screenshots confirm: the normal-height view shows no visible scrollbar track in the sidebar; the forced-overflow view shows the Collections list genuinely scrolled (different rows visible at the top, further down the list than the unscrolled state), confirming real, working vertical scroll.
+
+README.md: not touched. project.txt: not read, not modified, not staged.
+
+Change confined to exactly one CSS property value in frontend/src/styles.css: `.sidebar-content`'s `overflow-y`, `scroll` → `auto`. Zero changes to Request/Response scrollbars, layout, the splitter, colors, Collections/Requests rendering, sidebar width, sidebar functionality, buttons, tabs, or dropdowns. Reported in chat per the explicit "Report the exact sidebar selector/CSS changed and verification result" instruction.
+
+Actions:
+* Identified .sidebar-content as the sole vertically-scrollable Collections/History container (both .sidebar and .sidebar-inner use overflow:hidden)
+* Confirmed its overflow-y was explicitly forced to scroll (not merely implicit), the direct cause of the always-visible scrollbar track
+* Edited frontend/src/styles.css: .sidebar-content overflow-y scroll → auto
+* git diff --check — clean; bun test — 21/21 pass; frontend build — 0 errors
+* Real-browser (Playwright/Chromium) verification at 1440/700/400px: normal-viewport no-overflow check (overflow-y auto, scrollbar-width thin, no forced track), a forced-overflow check via an artificially short viewport confirming genuine overflow + functional scroll (scrollTop 0→143), a confirmation that .tab-panel's overflow-y remains untouched (still scroll), and screenshot review of both states
+* Removed scratch Playwright tooling from the session scratchpad
+* Did not commit or push; no Claude/Anthropic attribution added; project.txt untouched
+
+Context:
+tool=Claude Code
+branch=main
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
+worktree=main
+parent_agent=none
+
+## [2026-09-21T08:28:57Z] Match sidebar/workspace divider thickness to standard 1px UI borders
+
+User Prompt (verbatim, secrets redacted): "Make ONLY this small CSS adjustment. The vertical divider between the Collections sidebar and the main workspace is currently too thick compared with the other UI borders. Match it to the standard border thickness used throughout the UI. Use the same border width as the existing normal UI section borders. Keep the divider's current color. Keep sidebar width and layout unchanged. Do not change any other borders/scrollbars/splitter/colors/buttons/tabs/spacing/project.txt. Only adjust the relevant sidebar/main divider CSS. Verify visually: same thickness as other normal borders, no layout shift, 1440/700/400 still work. Run bun test/git diff --check. Update transcript/log. No commit/push/attribution."
+
+Agent Response Summary:
+Grepped every border-bottom/border-top/border-right declaration in styles.css to establish the "standard" thickness used throughout: app-header, sidebar-tabs, request-bar, tabs, response-bar, kv-header-row, headers-table, and both modal borders all use 1px. `.sidebar`'s `border-right` was the sole outlier at 2px, with a matching 2px value duplicated in the `@media (max-width: 768px)` responsive block (the rule that restores the sidebar's border when it's opened as a mobile overlay). Changed both occurrences from 2px to 1px, leaving the color (`var(--border-default)`, unchanged), sidebar width (260px, unchanged), the collapsed-state `border-right: none` rule, and every other selector untouched.
+
+VERIFICATION: git diff --check — clean. bun test — 21/21 pass. Real Chromium (Playwright) at 1440/700/400px: computed style confirmed `.sidebar`'s `border-right-width` is now `1px` (matching `.app-header`'s and `.tabs`' `border-bottom-width`, both also `1px`) with the color unchanged (`rgba(255,255,255,0.12)`, i.e. `--border-default`). At 1440px the sidebar renders at its normal 260px width with the thinner divider clearly visible and matching the header's bottom border weight. At 700/400px, the sidebar is collapsed by default (pre-existing, unrelated responsive behavior — untouched) with a 1px border on its near-invisible sliver; toggled it open via the hamburger menu at both narrow widths and confirmed the `@media` rule's border is also now correctly `1px`, sidebar width still exactly 260px (no layout shift), color unchanged. Screenshots at 1440px and 400px (sidebar opened) visually confirm the divider is now visibly thinner and matches the header's border weight, with no other visual change.
+
+README.md: not touched. project.txt: not read, not modified, not staged.
+
+Change confined to exactly two property values in frontend/src/styles.css: `.sidebar`'s `border-right` and the `@media (max-width: 768px)` block's `.app-shell.sidebar-collapsed .sidebar` border-right, both `2px` → `1px`. Zero changes to scrollbars, the Request/Response splitter, colors, buttons, tabs, spacing, or sidebar width/layout. Reported in chat; not committed or pushed, per instructions.
+
+Actions:
+* Grepped every border-bottom/border-top/border-right declaration in styles.css to confirm 1px is the standard thickness used throughout, and that .sidebar's 2px border-right (plus its 2px duplicate in the mobile media query) was the sole outlier
+* Edited frontend/src/styles.css: .sidebar border-right 2px → 1px; @media (max-width: 768px) .app-shell.sidebar-collapsed .sidebar border-right 2px → 1px
+* git diff --check — clean; bun test — 21/21 pass
+* Real-browser (Playwright/Chromium) verification at 1440/700/400px: computed border-right-width/color checks against .app-header/.tabs as the "standard" reference, sidebar-width no-shift check at every width, and (at 700/400px) toggling the sidebar open via the hamburger to verify the mobile media-query rule specifically; screenshot review at 1440px and 400px (opened)
+* Removed scratch Playwright tooling from the session scratchpad
+* Did not commit or push; no Claude/Anthropic attribution added; project.txt untouched
+
+Context:
+tool=Claude Code
+branch=main
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
+worktree=main
+parent_agent=none
