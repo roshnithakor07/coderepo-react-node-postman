@@ -131,6 +131,10 @@ export function PostmanWorkspace({ account, onLogout }) {
 		}
 	}
 
+	function handleClearResponse() {
+		setResponse(null);
+	}
+
 	async function handleGenerateSnippet(language) {
 		const activeEnv = environments.find((e) => e.isActive);
 		return snippetApi.generate({ ...request, language, environmentId: activeEnv?._id });
@@ -356,6 +360,7 @@ export function PostmanWorkspace({ account, onLogout }) {
 							request={request}
 							activeEnvironmentId={environments.find((e) => e.isActive)?._id}
 							onGenerateSnippet={handleGenerateSnippet}
+							onClear={handleClearResponse}
 						/>
 					</div>
 				</div>

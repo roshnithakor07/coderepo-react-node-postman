@@ -65,7 +65,7 @@ function SnippetPanel({ request, activeEnvironmentId, onGenerateSnippet }) {
 
 const TABS = ["Pretty", "Raw", "Headers"];
 
-export function ResponseViewer({ response, sending, request, activeEnvironmentId, onGenerateSnippet }) {
+export function ResponseViewer({ response, sending, request, activeEnvironmentId, onGenerateSnippet, onClear }) {
 	const [activeTab, setActiveTab] = useState("Pretty");
 	const [showSnippet, setShowSnippet] = useState(false);
 
@@ -130,7 +130,17 @@ export function ResponseViewer({ response, sending, request, activeEnvironmentId
 						</span>
 					)}
 				</div>
-				<div style={{ marginLeft: "auto" }}>{SnippetToggle}</div>
+				<div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
+					<button
+						className="icon-btn"
+						onClick={onClear}
+						title="Clear response"
+						style={{ width: "auto", padding: "0 10px", fontSize: 11, fontWeight: 700 }}
+					>
+						Clear
+					</button>
+					{SnippetToggle}
+				</div>
 			</div>
 
 			{showSnippet
