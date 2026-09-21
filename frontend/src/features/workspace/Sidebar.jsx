@@ -49,7 +49,7 @@ function CollectionItem({ collection, defaultOpen, activeRequestId, onSelectRequ
 	);
 }
 
-export function Sidebar({ collections, history, activeRequestId, onSelectRequest, onCreateCollection, onRenameCollection, onDeleteCollection, onClearHistory, onSelectHistory }) {
+export function Sidebar({ collections, history, activeRequestId, onSelectRequest, onCreateCollection, onRenameCollection, onDeleteCollection, onClearHistory, onSelectHistory, onResizeMouseDown }) {
 	const [activeTab, setActiveTab] = useState("Collections");
 	const [showNew, setShowNew] = useState(false);
 	const [newName, setNewName] = useState("");
@@ -161,6 +161,14 @@ export function Sidebar({ collections, history, activeRequestId, onSelectRequest
 					)}
 				</div>
 			</div>
+			<div
+				className="sidebar-resizer"
+				onMouseDown={onResizeMouseDown}
+				role="separator"
+				aria-orientation="vertical"
+				aria-label="Resize sidebar"
+				title="Drag to resize"
+			/>
 		</div>
 	);
 }

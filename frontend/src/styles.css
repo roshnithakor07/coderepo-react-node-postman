@@ -70,7 +70,7 @@
   --bg-input-focus: #222228;
   --border-subtle:  rgba(255,255,255,0.06);
   --border-default: rgba(255,255,255,0.12);
-  --border-strong:  rgba(255,255,255,0.22);
+  --border-strong:  rgba(255,255,255,0.30);
   --text-primary:   #f0f0f5;
   --text-secondary: #a0a0b0;
   --text-tertiary:  #606070;
@@ -160,7 +160,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px
 .login-hint strong { color: var(--text-primary); font-weight: 600; }
 
 /* ─── App shell ─── */
-.app-shell { display: grid; grid-template-columns: 260px 1fr; grid-template-rows: 48px 1fr; width: 100%; height: 100dvh; overflow: hidden; }
+.app-shell { display: grid; grid-template-columns: var(--sidebar-w, 260px) 1fr; grid-template-rows: 48px 1fr; width: 100%; height: 100dvh; overflow: hidden; }
 .app-shell.sidebar-collapsed { grid-template-columns: 0 1fr; }
 
 /* ─── Header ─── */
@@ -186,15 +186,20 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px
 .logout-btn:hover { background: var(--bg-hover); color: var(--danger); border-color: var(--danger); }
 
 /* ─── Sidebar ─── */
-.sidebar { overflow: hidden; background: var(--bg-workspace); border-right: 1px solid var(--border-default); display: flex; flex-direction: column; transition: width var(--t-slow) var(--ease); }
+.sidebar { position: relative; overflow: hidden; background: var(--bg-workspace); border-right: 1px solid var(--border-default); display: flex; flex-direction: column; transition: width var(--t-slow) var(--ease); }
 .app-shell.sidebar-collapsed .sidebar { width: 0; border-right: none; }
-.sidebar-inner { display: flex; flex-direction: column; width: 260px; height: 100%; overflow: hidden; }
+.sidebar-inner { display: flex; flex-direction: column; width: var(--sidebar-w, 260px); height: 100%; overflow: hidden; }
+.sidebar-resizer { position: absolute; top: 0; right: 0; bottom: 0; width: 10px; flex-shrink: 0; background: transparent; cursor: col-resize; z-index: 10; }
+.sidebar-resizer::after { content: ''; position: absolute; top: 0; bottom: 0; right: 0; width: 1px; background: var(--border-default); transition: background var(--t-fast) var(--ease); }
+.sidebar-resizer::before { content: ''; position: absolute; right: -1px; top: 50%; transform: translateY(-50%); width: 3px; height: 48px; border-radius: 99px; background: var(--border-strong); transition: background var(--t-fast) var(--ease); }
+.sidebar-resizer:hover::after, .sidebar-resizer:active::after { background: var(--focus-border); }
+.sidebar-resizer:hover::before, .sidebar-resizer:active::before { background: var(--focus-border); }
 .sidebar-tabs { display: flex; border-bottom: 1px solid var(--border-default); padding: 0 8px; flex-shrink: 0; background: var(--bg-workspace); }
 .sidebar-tab { flex: 1; height: 38px; border-bottom: 2px solid transparent; margin-bottom: -1px; color: var(--text-secondary); font-size: 12px; font-weight: 600; letter-spacing: 0.2px; transition: color var(--t-fast), border-color var(--t-fast); }
 .sidebar-tab:hover { color: var(--text-primary); }
 .sidebar-tab.active { color: var(--brand); border-bottom-color: var(--brand); }
 /* Always show scrollbar track so user knows sidebar is scrollable */
-.sidebar-content { flex: 1; overflow-y: scroll; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) rgba(255,255,255,0.04); padding: 8px 6px; }
+.sidebar-content { flex: 1; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) rgba(255,255,255,0.04); padding: 8px 6px; }
 .sidebar-section-header { display: flex; align-items: center; justify-content: space-between; padding: 6px 6px 4px; }
 .sidebar-section-title { font-size: 10px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; color: var(--text-tertiary); }
 .new-btn { display: flex; align-items: center; gap: 3px; height: 24px; padding: 0 8px; border: 1px solid var(--border-default); border-radius: var(--radius-sm); color: var(--text-secondary); font-size: 11px; font-weight: 700; transition: all var(--t-fast) var(--ease); }
@@ -262,11 +267,15 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px
 /* ─── Request builder ─── */
 .request-builder { display: flex; flex-direction: column; background: var(--bg-panel); flex: 1; min-height: 0; }
 .request-bar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border-subtle); flex-shrink: 0; }
-.method-select { height: 38px; padding: 0 24px 0 14px; border: 1px solid var(--border-default); border-radius: var(--radius-md); background: var(--bg-panel); font-family: var(--font-mono); font-size: 11px; font-weight: 700; cursor: pointer; min-width: 104px; transition: border-color var(--t-fast), box-shadow var(--t-fast); letter-spacing: 0.5px; }
+.method-select { height: 38px; padding: 0 24px 0 14px; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--bg-panel); font-family: var(--font-mono); font-size: 11px; font-weight: 700; cursor: pointer; min-width: 104px; transition: border-color var(--t-fast), box-shadow var(--t-fast); letter-spacing: 0.5px; }
 .method-select:hover { border-color: var(--border-strong); }
 .method-select:focus { outline: none; border-color: var(--focus-border); box-shadow: 0 0 0 2px var(--focus-ring); }
 .method-select option { background: var(--bg-panel); }
-.url-input { flex: 1; height: 38px; padding: 0 14px; border: 1px solid var(--border-default); border-radius: var(--radius-md); background: var(--bg-panel); color: var(--text-primary); font-family: var(--font-mono); font-size: 13px; transition: border-color var(--t-fast), box-shadow var(--t-fast); }
+.url-input-wrap { position: relative; flex: 1; height: 38px; }
+.url-highlight { position: absolute; inset: 0; display: flex; align-items: center; padding: 0 14px; font-family: var(--font-mono); font-size: 13px; color: var(--text-primary); white-space: pre; overflow: hidden; pointer-events: none; }
+.url-var-resolved { color: var(--info); }
+.url-var-unresolved { color: var(--danger); }
+.url-input { position: relative; z-index: 1; width: 100%; height: 38px; padding: 0 14px; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: transparent; color: transparent; caret-color: var(--text-primary); font-family: var(--font-mono); font-size: 13px; transition: border-color var(--t-fast), box-shadow var(--t-fast); }
 .url-input:focus { outline: none; border-color: var(--focus-border); box-shadow: 0 0 0 2px var(--focus-ring); }
 .url-input::placeholder { color: var(--text-placeholder); font-family: var(--font-sans); font-size: 12px; }
 .send-btn { height: 38px; padding: 0 20px; border-radius: var(--radius-md); background: var(--primary); color: #fff; font-size: 13px; font-weight: 700; white-space: nowrap; transition: all var(--t-fast) var(--ease); letter-spacing: 0.2px; }
@@ -287,7 +296,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px
 .tab-btn.active { color: var(--brand); border-bottom-color: var(--brand); }
 .tab-count { display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px; padding: 0 4px; margin-left: 5px; border-radius: 99px; background: var(--brand-dim); color: var(--brand); font-size: 9px; font-weight: 800; }
 /* Always scroll tab panel so long content is accessible */
-.tab-panel { display: flex; flex-direction: column; flex: 1; min-height: 0; padding: 14px 14px 28px; overflow-y: scroll; scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) rgba(255,255,255,0.04); }
+.tab-panel { display: flex; flex-direction: column; flex: 1; min-height: 0; padding: 14px 14px 28px; overflow-y: scroll; overflow-x: auto; scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) rgba(255,255,255,0.04); }
 .body-panel { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 
 /* ─── KV Editor ─── */
@@ -450,8 +459,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px
 /* ─── Responsive ─── */
 @media (max-width: 768px) {
   .app-shell { grid-template-columns: 0 1fr; }
-  .app-shell.sidebar-collapsed { grid-template-columns: 260px 1fr; }
-  .app-shell.sidebar-collapsed .sidebar { width: 260px; border-right: 1px solid var(--border-default); }
+  .app-shell.sidebar-collapsed { grid-template-columns: var(--sidebar-w, 260px) 1fr; }
+  .app-shell.sidebar-collapsed .sidebar { width: var(--sidebar-w, 260px); border-right: 1px solid var(--border-default); }
   .save-btn { display: none; }
   .env-selector label { display: none; }
   .account-chip span { display: none; }

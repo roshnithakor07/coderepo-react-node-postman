@@ -1,4 +1,4 @@
-const VARIABLE_PATTERN = /\{\{\w+\}\}/g;
+export const VARIABLE_PATTERN = /\{\{\w+\}\}/g;
 
 function encodePreservingVariables(text) {
 	const source = text ?? "";
@@ -46,6 +46,22 @@ export function buildDisplayUrl(url, params) {
 
 	const allPairs = [...preservedPairs, ...paramPairs];
 	return allPairs.length ? `${base}?${allPairs.join("&")}` : base;
+}
+
+// Pure, display-only: splits display text into plain-text and {{variable}}
+// segments for the read-only highlight overlay drawn behind the URL input.
+// Never touches request.url/request.params — purely a rendering helper.
+export function tokenizeUrlForDisplay(text) {
+	const source = text ?? "";
+	const tokens = [];
+	let lastIndex = 0;
+	for (const match of source.matchAll(VARIABLE_PATTERN)) {
+		if (match.index > lastIndex) tokens.push({ type: "text", value: source.slice(lastIndex, match.index) });
+		tokens.push({ type: "variable", value: match[0], key: match[0].slice(2, -2) });
+		lastIndex = match.index + match[0].length;
+	}
+	if (lastIndex < source.length) tokens.push({ type: "text", value: source.slice(lastIndex) });
+	return tokens;
 }
 
 function decodeSafely(text) {

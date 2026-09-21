@@ -1,7 +1,7 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { KeyValueEditor } from "./KeyValueEditor.jsx";
 import { AuthPanel } from "./AuthPanel.jsx";
-import { buildDisplayUrl, syncParamsFromUrlEdit } from "./url.js";
+import { buildDisplayUrl, syncParamsFromUrlEdit, tokenizeUrlForDisplay } from "./url.js";
 
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
 const BODY_TYPES = ["none", "json", "form", "text", "xml"];
@@ -11,8 +11,9 @@ const METHOD_COLORS = { GET: "#4ade80", POST: "#60a5fa", PUT: "#fbbf24", PATCH: 
 function countEnabled(rows) { return (rows || []).filter(r => r.enabled && r.key).length; }
 function hasAuth(auth) { if (!auth || auth.type === "none") return false; return auth.type === "bearer" ? !!auth.token : auth.type === "basic" ? !!auth.username : auth.type === "apikey" ? !!auth.apiKeyName : false; }
 
-export function RequestBuilder({ request, onRequestChange, onSend, onSave, sending }) {
+export function RequestBuilder({ request, onRequestChange, onSend, onSave, sending, activeEnvironmentVariables = [] }) {
 	const [activeTab, setActiveTab] = useState("Params");
+	const overlayRef = useRef(null);
 	const set = useCallback((field, value) => onRequestChange({ ...request, [field]: value }), [request, onRequestChange]);
 	const onUrlChange = useCallback(
 		(e) => {
@@ -21,8 +22,18 @@ export function RequestBuilder({ request, onRequestChange, onSend, onSave, sendi
 		},
 		[request, onRequestChange],
 	);
+	// Keeps the read-only highlight layer in lockstep when the real input
+	// auto-scrolls its text (e.g. a URL longer than the visible field).
+	const onUrlScroll = useCallback((e) => {
+		if (overlayRef.current) overlayRef.current.scrollLeft = e.target.scrollLeft;
+	}, []);
+	const isVariableResolved = useCallback(
+		(key) => activeEnvironmentVariables.some((v) => v.enabled && v.key === key),
+		[activeEnvironmentVariables],
+	);
 
 	const { method = "GET", url = "", params = [], headers = [], auth = { type: "none" }, body = "", bodyType = "none" } = request;
+	const displayUrl = buildDisplayUrl(url, params);
 
 	const tabs = [
 		{ label: "Params",  badge: countEnabled(params) || null },
@@ -44,16 +55,28 @@ export function RequestBuilder({ request, onRequestChange, onSend, onSave, sendi
 					{METHODS.map(m => <option key={m} value={m} style={{ color: METHOD_COLORS[m] }}>{m}</option>)}
 				</select>
 
-				<input
-					className="url-input"
-					type="text"
-					value={buildDisplayUrl(url, params)}
-					onChange={onUrlChange}
-					onKeyDown={e => (e.key === "Enter" && (e.ctrlKey || e.metaKey)) && onSend()}
-					placeholder="Enter request URL — use {{variable}} for environment values"
-					aria-label="Request URL"
-					spellCheck={false}
-				/>
+				<div className="url-input-wrap">
+					<div className="url-highlight" ref={overlayRef} aria-hidden="true">
+						{displayUrl
+							? tokenizeUrlForDisplay(displayUrl).map((token, i) =>
+								token.type === "variable"
+									? <span key={i} className={isVariableResolved(token.key) ? "url-var-resolved" : "url-var-unresolved"}>{token.value}</span>
+									: <span key={i}>{token.value}</span>
+							)
+							: null}
+					</div>
+					<input
+						className="url-input"
+						type="text"
+						value={displayUrl}
+						onChange={onUrlChange}
+						onScroll={onUrlScroll}
+						onKeyDown={e => (e.key === "Enter" && (e.ctrlKey || e.metaKey)) && onSend()}
+						placeholder="Enter request URL — use {{variable}} for environment values"
+						aria-label="Request URL"
+						spellCheck={false}
+					/>
+				</div>
 
 				<button className="save-btn" onClick={onSave} disabled={!url || sending} title="Save to collection">
 					Save

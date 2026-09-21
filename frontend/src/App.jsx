@@ -53,7 +53,9 @@ export function PostmanWorkspace({ account, onLogout }) {
 	const [showSave, setShowSave] = useState(false);
 	const [confirmDialog, setConfirmDialog] = useState(null);
 	const [splitterY, setSplitterY] = useState(50);
+	const [sidebarWidth, setSidebarWidth] = useState(260);
 	const draggingRef = useRef(false);
+	const sidebarDraggingRef = useRef(false);
 	const containerRef = useRef(null);
 	// Bumped by every action that changes what "the current request" means —
 	// selecting a saved/history request, or editing any field. handleSend()
@@ -62,6 +64,12 @@ export function PostmanWorkspace({ account, onLogout }) {
 	// longer matches and the stale response/error/loading state is discarded
 	// instead of being applied on top of whatever is now on screen.
 	const requestGenerationRef = useRef(0);
+
+	// Closing the sidebar must not leave it remembering a narrow resized width —
+	// reopening should always start from the normal, usable default.
+	useEffect(() => {
+		if (sidebarCollapsed) setSidebarWidth(260);
+	}, [sidebarCollapsed]);
 
 	const loadCollections = useCallback(async () => {
 		try {
@@ -259,8 +267,41 @@ export function PostmanWorkspace({ account, onLogout }) {
 		window.addEventListener("mouseup", onUp);
 	}
 
+	// Sidebar resize drag — drag right widens, drag left narrows, dragging past the
+	// minimum snaps into the existing collapsed state rather than shrinking further.
+	function onSidebarResizeMouseDown(e) {
+		e.preventDefault();
+		sidebarDraggingRef.current = true;
+		// Below the 768px breakpoint the sidebar becomes a toggled overlay and the
+		// "sidebar-collapsed" class's meaning inverts (it then means "shown"), so the
+		// away/visible booleans below have to flip with it to match the existing CSS.
+		const isMobile = window.innerWidth <= 768;
+		function onMove(me) {
+			// If a mouseup was ever lost (e.g. the button was released outside the
+			// browser window), the next mousemove's own buttons state catches it and
+			// ends the drag immediately, instead of trusting the ref indefinitely.
+			if (!sidebarDraggingRef.current || me.buttons !== 1) {
+				onUp();
+				return;
+			}
+			if (me.clientX < 180) {
+				setSidebarCollapsed(!isMobile);
+				return;
+			}
+			setSidebarCollapsed(isMobile);
+			setSidebarWidth(Math.max(180, Math.min(480, me.clientX)));
+		}
+		function onUp() {
+			sidebarDraggingRef.current = false;
+			window.removeEventListener("mousemove", onMove);
+			window.removeEventListener("mouseup", onUp);
+		}
+		window.addEventListener("mousemove", onMove);
+		window.addEventListener("mouseup", onUp);
+	}
+
 	return (
-		<div className={`app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
+		<div className={`app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`} style={{ "--sidebar-w": `${sidebarWidth}px` }}>
 			<AppHeader
 				account={account}
 				environments={environments}
@@ -281,6 +322,7 @@ export function PostmanWorkspace({ account, onLogout }) {
 				onDeleteCollection={handleDeleteCollection}
 				onClearHistory={handleClearHistory}
 				onSelectHistory={handleSelectHistory}
+				onResizeMouseDown={onSidebarResizeMouseDown}
 			/>
 			<main className="workspace">
 				{error && (
@@ -297,6 +339,7 @@ export function PostmanWorkspace({ account, onLogout }) {
 							onSend={handleSend}
 							onSave={() => setShowSave(true)}
 							sending={sending}
+							activeEnvironmentVariables={environments.find((e) => e.isActive)?.variables || []}
 						/>
 					</div>
 					<div
