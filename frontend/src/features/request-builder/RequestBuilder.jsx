@@ -79,7 +79,7 @@ export function RequestBuilder({ request, onRequestChange, onSend, onSave, sendi
 				{activeTab === "Auth"    && <AuthPanel auth={auth} onChange={v => set("auth", v)} />}
 				{activeTab === "Headers" && <KeyValueEditor rows={headers} onChange={v => set("headers", v)} keyPlaceholder="Header name" valuePlaceholder="Header value" />}
 				{activeTab === "Body"    && (
-					<div>
+					<div className="body-panel">
 						<div className="body-type-row">
 							<span className="body-type-label">Body type</span>
 							{BODY_TYPES.map(t => (
