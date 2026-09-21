@@ -53,7 +53,7 @@ export function PostmanWorkspace({ account, onLogout }) {
 	const [showSave, setShowSave] = useState(false);
 	const [confirmDialog, setConfirmDialog] = useState(null);
 	const [splitterY, setSplitterY] = useState(50);
-	const [sidebarWidth, setSidebarWidth] = useState(260);
+	const [sidebarWidth, setSidebarWidth] = useState(290);
 	const draggingRef = useRef(false);
 	const sidebarDraggingRef = useRef(false);
 	const containerRef = useRef(null);
@@ -68,7 +68,7 @@ export function PostmanWorkspace({ account, onLogout }) {
 	// Closing the sidebar must not leave it remembering a narrow resized width —
 	// reopening should always start from the normal, usable default.
 	useEffect(() => {
-		if (sidebarCollapsed) setSidebarWidth(260);
+		if (sidebarCollapsed) setSidebarWidth(290);
 	}, [sidebarCollapsed]);
 
 	const loadCollections = useCallback(async () => {

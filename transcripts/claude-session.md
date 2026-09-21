@@ -3150,3 +3150,51 @@ branch=main
 repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
 worktree=main
 parent_agent=none
+
+## [2026-09-21T10:41:30+00:00] Sidebar default-width increase — read-only investigation
+
+User Prompt (verbatim, secrets redacted):
+We need one small UI adjustment to the Collections sidebar. IMPORTANT CLARIFICATION: The text: GET — Delayed response (5s, for... is ONLY an example/ruler showing the approximate amount of horizontal space I want. It has NOTHING to do with the endpoint/request itself. I do NOT want the full request name to become visible. I want the default Collections sidebar to be wider than it is now, approximately enough that a long request name can display around this amount before normal truncation. CURRENT: The default sidebar is currently around 260px and truncates long request names too early. DESIRED: Increase the default sidebar width enough to provide the approximate visible text length shown above. This is ONLY a width adjustment. DO NOT change request names, truncation behavior, font size, typography, spacing, collection layout, collection expand/collapse, resize behavior, the 180px minimum, the 480px maximum, the request builder, or responsive behavior unless required by the existing layout. Do NOT add persistence, add new state, or perform a sidebar redesign. FIRST: READ-ONLY INVESTIGATION — inspect current default width, every place it's referenced, existing min/max, existing collapse/reopen reset, and current request-name available width/padding, then determine the smallest reasonable increase. Do NOT use the request name itself as a special case or add request-specific logic. If the default changes, the collapse/reopen reset MUST use the same new default. STOP after the investigation and wait for approval.
+
+Agent Response Summary:
+Performed a read-only investigation only — no code changed. Confirmed the current default sidebar width is 260px, set/reset in exactly two JS locations (App.jsx:56 useState, App.jsx:71 collapse-reset useEffect) and mirrored as a CSS fallback in four places (styles.css:163 `.app-shell`, :191 `.sidebar-inner`, :462-463 the two mobile `@media (max-width:768px)` open-state rules). Used a real-Chromium (Playwright) probe against the live dev server to measure the natural unwrapped width of the user's reference "ruler" string at the exact computed font of `.req-name` (194px), then live-simulated the `--sidebar-w` custom property at several candidate sidebar widths to find the exact point where `.req-name`'s available width first reaches that 194px target without changing any padding, gap, badge width, or truncation CSS. Result: 290px is the smallest tested sidebar width at which the reference string's needed width (194px) is fully covered by `.req-name`'s available space (195px available at 290px vs. 193px still short at 288px) — a +30px increase over the current 260px default, well inside the existing 180-480px resize range. Recommended 290px as the new default; presented the full 10-point investigation report to the user and stopped to await approval before any implementation.
+
+Actions:
+* Ran Playwright browser measurement script against localhost:3000 (scratchpad only, not committed) to measure `.req-name` reference-text width and sweep candidate `--sidebar-w` values (260/280/285/288/290/295/300)
+* Ran `grep -n "260"` against frontend/src/App.jsx and frontend/src/styles.css to reconfirm all 6 default-width reference locations and current line numbers
+* Deleted the scratchpad Playwright measurement directory after use
+* No source files modified; no commit; no push
+
+Context:
+tool=Claude Code
+branch=main
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
+worktree=main
+parent_agent=none
+
+## [2026-09-21T10:47:07+00:00] Sidebar default-width increase — implementation (260px → 290px)
+
+User Prompt (verbatim, secrets redacted):
+290px is APPROVED. Implement ONLY the approved Collections sidebar default-width change: 260px → 290px. Update all six existing default-width references identified in the investigation so they remain synchronized: (1) frontend/src/App.jsx sidebarWidth initial state and collapse/reopen reset; (2) frontend/src/styles.css desktop .app-shell fallback, .sidebar-inner fallback, and the two mobile collapsed/open fallback values. Do NOT change the 180px minimum, 480px maximum, request-name truncation, .req-name styling, collection layout, typography, sidebar resize behavior (other than the default value), responsive breakpoints, or any other UI; do NOT add request-specific logic. Existing behavior must remain: resize 180-480 works, close/reopen returns to 290px, cursor movement without dragging doesn't resize, collection expand/collapse works, request selection works, request builder remains functional, mobile/responsive behavior intact. Run bun test, bun run build, git diff --check, and real-Chromium verification of all listed scenarios. Update transcripts/claude-session.md and log.txt; README.md unchanged. Do NOT commit or push. STOP after verification and wait for review.
+
+Agent Response Summary:
+Implemented exactly the six approved 260→290 edits: App.jsx:56 (`useState` initial sidebarWidth) and App.jsx:71 (collapse-reset `useEffect`), plus styles.css:163 (`.app-shell` fallback), :191 (`.sidebar-inner` fallback), and :462-463 (the two mobile `@media (max-width:768px)` collapsed/open fallbacks). Confirmed via grep that no `260` references remain in either file. Ran `bun test` (21 pass, 0 fail), `cd frontend && bun run build` (succeeded, 34 modules transformed), and `git diff --check` (clean, no output). Started the Vite dev server and ran real-Chromium (Playwright) verification covering: initial sidebar width = 290px; `.req-name` available width (195px) now covers the approved reference-text width (194px) while truncation CSS (`overflow:hidden; text-overflow:ellipsis; white-space:nowrap`) is untouched and still applied; drag-to-narrow below 180px still collapses the sidebar; drag-to-wide clamps at 480px; both narrow-resize→reopen and wide-resize→reopen return to 290px (not 260px); collection expand/collapse toggle still works; request selection (`.request-item.active`) still works; cursor movement without a held mouse button does not change sidebar width (290px before and after); and both mobile viewports (700px, 400px) still open the sidebar at 290px via the hamburger with correct inverted collapsed-class semantics. All checks passed. `git diff` confirms only the six intended one-line numeric changes (260→290) in App.jsx and styles.css — no other lines touched, no unrelated UI changes, `project.txt` remains untracked and unmodified. Stopped after verification; no commit, no push.
+
+Actions:
+* Edited frontend/src/App.jsx (2 lines: sidebarWidth useState default, collapse-reset useEffect default)
+* Edited frontend/src/styles.css (4 lines: .app-shell fallback, .sidebar-inner fallback, 2 mobile @media fallbacks)
+* Ran `grep -n "260" frontend/src/App.jsx frontend/src/styles.css` to confirm no stray references remain
+* Ran `bun test` (21 pass, 0 fail)
+* Ran `cd frontend && bun run build` (succeeded)
+* Ran `git diff --check` (clean)
+* Started Vite dev server temporarily for browser verification; ran Playwright scripts (scratchpad only, not committed) covering desktop default width, req-name fit vs. reference text, truncation CSS, resize clamp (180/480), collapse/reopen from both narrow and wide resize states, collection expand/collapse, request selection, no-button cursor movement, and mobile viewports (700px/400px)
+* Stopped the dev server and deleted the scratchpad Playwright directory and log after verification
+* Ran `git diff -- frontend/src/App.jsx frontend/src/styles.css` to confirm only the six intended lines changed
+* No commit, no push
+
+Context:
+tool=Claude Code
+branch=main
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
+worktree=main
+parent_agent=none
