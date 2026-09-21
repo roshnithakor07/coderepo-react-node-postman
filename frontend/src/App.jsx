@@ -15,7 +15,7 @@ import { Sidebar } from "./features/workspace/Sidebar.jsx";
 import { hasSessionToken, setSessionToken } from "./shared/api/client.js";
 import { ConfirmDialog } from "./shared/components/ConfirmDialog.jsx";
 
-const DEFAULT_REQUEST = { method: "GET", url: "", params: [], headers: [], body: "", bodyType: "none", auth: { type: "none" } };
+const DEFAULT_REQUEST = { method: "GET", url: "", params: [{ key: "", value: "", enabled: false }, { key: "", value: "", enabled: false }], headers: [], body: "", bodyType: "none", auth: { type: "none" } };
 
 function BrandIcon() {
 	return (
@@ -52,7 +52,7 @@ export function PostmanWorkspace({ account, onLogout }) {
 	const [showEnvs, setShowEnvs] = useState(false);
 	const [showSave, setShowSave] = useState(false);
 	const [confirmDialog, setConfirmDialog] = useState(null);
-	const [splitterY, setSplitterY] = useState(45);
+	const [splitterY, setSplitterY] = useState(50);
 	const draggingRef = useRef(false);
 	const containerRef = useRef(null);
 	// Bumped by every action that changes what "the current request" means —
@@ -247,7 +247,7 @@ export function PostmanWorkspace({ account, onLogout }) {
 		function onMove(me) {
 			if (!draggingRef.current || !containerRef.current) return;
 			const rect = containerRef.current.getBoundingClientRect();
-			const pct = Math.max(20, Math.min(80, ((me.clientY - rect.top) / rect.height) * 100));
+			const pct = Math.max(5, Math.min(95, ((me.clientY - rect.top) / rect.height) * 100));
 			setSplitterY(pct);
 		}
 		function onUp() {
@@ -290,7 +290,7 @@ export function PostmanWorkspace({ account, onLogout }) {
 					</div>
 				)}
 				<div className="workspace-panes" ref={containerRef}>
-					<div className="resizable-pane" style={{ flex: `0 0 ${splitterY}%`, minHeight: "160px" }}>
+					<div className="resizable-pane" style={{ flex: `0 0 ${splitterY}%`, minHeight: "95px" }}>
 						<RequestBuilder
 							request={request}
 							onRequestChange={updateRequest}
@@ -306,7 +306,7 @@ export function PostmanWorkspace({ account, onLogout }) {
 						aria-label="Resize panels"
 						title="Drag to resize"
 					/>
-					<div className="resizable-pane" style={{ flex: `1 1 ${100 - splitterY}%`, minHeight: "140px" }}>
+					<div className="resizable-pane" style={{ flex: `1 1 ${100 - splitterY}%`, minHeight: "56px" }}>
 						<ResponseViewer
 							response={response}
 							sending={sending}
