@@ -1,7 +1,12 @@
 export function AuthPanel({ auth, onChange }) {
 	const type = auth?.type || "none";
 	const set = (field, value) => onChange({ ...auth, type, [field]: value });
-	const setType = (t) => onChange({ type: t });
+	// Selecting API Key must write apiKeyIn into state immediately — the
+	// placement radio below only ever *visually* defaults to "header" via
+	// `auth?.apiKeyIn || "header"`; without this, that default is never
+	// actually persisted until the user explicitly clicks the radio, so a
+	// key sent under the apparent default silently has nowhere to go.
+	const setType = (t) => onChange(t === "apikey" ? { type: t, apiKeyIn: "header" } : { type: t });
 
 	return (
 		<div className="auth-panel">

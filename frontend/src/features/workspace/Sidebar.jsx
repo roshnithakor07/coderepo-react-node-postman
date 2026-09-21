@@ -24,12 +24,19 @@ function CollectionItem({ collection, defaultOpen, activeRequestId, onSelectRequ
 	return (
 		<div className="collection-item">
 			<div className="menu-anchor">
-				<button className="collection-header" onClick={() => setOpen(o => !o)} aria-expanded={open}>
+				<div
+					className="collection-header"
+					role="button"
+					tabIndex={0}
+					onClick={() => setOpen(o => !o)}
+					onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(o => !o); } }}
+					aria-expanded={open}
+				>
 					<span className={`collection-chevron ${open ? "open" : ""}`}>▶</span>
 					<span className="coll-icon">📁</span>
 					<span className="collection-name" title={collection.name}>{collection.name}</span>
 					<button className="collection-menu-btn" onClick={e => { e.stopPropagation(); setMenuOpen(m => !m); }} aria-label="Options" aria-haspopup="true">⋯</button>
-				</button>
+				</div>
 				{menuOpen && <CollectionMenu collection={collection} onRename={onRenameCollection} onDelete={onDeleteCollection} onClose={() => setMenuOpen(false)} />}
 			</div>
 			{open && (
