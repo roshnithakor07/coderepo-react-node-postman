@@ -240,6 +240,7 @@ export function PostmanWorkspace({ account, onLogout }) {
 	async function handleUpdateEnv(id, data) {
 		const updated = await environmentApi.update(id, data);
 		setEnvironments((prev) => prev.map((e) => (e._id === id ? updated : e)));
+		return updated;
 	}
 
 	async function handleActivateEnv(id) {

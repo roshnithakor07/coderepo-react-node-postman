@@ -421,8 +421,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px
 /* Env modal */
 .env-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
 .env-list-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--bg-elevated); cursor: pointer; transition: all var(--t-fast); }
-.env-list-item:hover { border-color: var(--brand); background: var(--brand-dimmer); }
-.env-list-item.selected { border-color: var(--brand); background: var(--brand-dim); }
+.env-list-item:hover { border-color: var(--info); background: var(--bg-hover); }
+.env-list-item.selected { border-color: var(--info); background: var(--info-bg); }
 .env-active-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--border-strong); flex-shrink: 0; transition: background var(--t-base); }
 .env-active-dot.active { background: var(--success); box-shadow: 0 0 0 3px var(--success-bg); }
 .env-list-name { flex: 1; font-size: 13px; font-weight: 600; color: var(--text-primary); }
@@ -431,6 +431,10 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px
 .env-activate-btn.active-env { border-color: var(--success); color: var(--success); background: var(--success-bg); }
 .env-del-btn { width: 26px; height: 26px; border-radius: var(--radius-sm); color: var(--text-tertiary); font-size: 15px; display: grid; place-items: center; transition: all var(--t-fast); }
 .env-del-btn:hover { background: var(--danger-bg); color: var(--danger); }
+.env-save-status { font-size: 12px; font-weight: 600; }
+.env-save-status.saved { color: var(--text-tertiary); }
+.env-save-status.unsaved { color: var(--warning); }
+.env-save-status.danger { color: var(--danger); }
 .env-vars-title { font-size: 11px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--text-secondary); margin: 0 0 10px; }
 .var-row { display: grid; grid-template-columns: 18px 1fr 1fr 26px; gap: 6px; align-items: center; margin-bottom: 5px; }
 .var-input { height: 32px; padding: 0 10px; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); background: var(--bg-input); color: var(--text-primary); font-family: var(--font-mono); font-size: 12px; transition: border-color var(--t-fast); }
