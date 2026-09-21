@@ -260,7 +260,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px
 .service-error button:hover { background: var(--danger); color: #fff; }
 
 /* ─── Request builder ─── */
-.request-builder { display: flex; flex-direction: column; background: var(--bg-panel); border-bottom: 2px solid var(--border-default); flex-shrink: 0; }
+.request-builder { display: flex; flex-direction: column; background: var(--bg-panel); border-bottom: 2px solid var(--border-default); flex: 1; min-height: 0; }
 .request-bar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border-subtle); }
 .method-select { height: 38px; padding: 0 24px 0 14px; border: 1px solid var(--border-default); border-radius: var(--radius-md); background: var(--bg-panel); font-family: var(--font-mono); font-size: 11px; font-weight: 700; cursor: pointer; min-width: 104px; transition: border-color var(--t-fast), box-shadow var(--t-fast); letter-spacing: 0.5px; }
 .method-select:hover { border-color: var(--border-strong); }
@@ -287,7 +287,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px
 .tab-btn.active { color: var(--brand); border-bottom-color: var(--brand); }
 .tab-count { display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px; padding: 0 4px; margin-left: 5px; border-radius: 99px; background: var(--brand-dim); color: var(--brand); font-size: 9px; font-weight: 800; }
 /* Always scroll tab panel so long content is accessible */
-.tab-panel { padding: 14px; overflow-y: scroll; scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) rgba(255,255,255,0.04); }
+.tab-panel { flex: 1; min-height: 0; padding: 14px; overflow-y: scroll; scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) rgba(255,255,255,0.04); }
 
 /* ─── KV Editor ─── */
 .kv-editor { display: flex; flex-direction: column; gap: 4px; }
