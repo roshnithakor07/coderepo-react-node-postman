@@ -43,6 +43,8 @@ export function PostmanWorkspace({ account, onLogout }) {
 	const [collections, setCollections] = useState([]);
 	const [environments, setEnvironments] = useState([]);
 	const [history, setHistory] = useState([]);
+	const [historyCursor, setHistoryCursor] = useState(null);
+	const [historyLoadingMore, setHistoryLoadingMore] = useState(false);
 	const [request, setRequest] = useState(DEFAULT_REQUEST);
 	const [response, setResponse] = useState(null);
 	const [sending, setSending] = useState(false);
@@ -88,13 +90,32 @@ export function PostmanWorkspace({ account, onLogout }) {
 		}
 	}, []);
 
+	// Always replaces (used on mount and after every send) — the first page
+	// is the source of truth for "what's most recent," so a refresh discards
+	// whatever additional pages "Load more" had appended.
 	const loadHistory = useCallback(async () => {
 		try {
-			setHistory(await historyApi.list());
+			const { items, nextCursor } = await historyApi.list();
+			setHistory(items);
+			setHistoryCursor(nextCursor);
 		} catch (e) {
 			setError(e.message);
 		}
 	}, []);
+
+	const loadMoreHistory = useCallback(async () => {
+		if (!historyCursor || historyLoadingMore) return;
+		setHistoryLoadingMore(true);
+		try {
+			const { items, nextCursor } = await historyApi.list({ cursor: historyCursor });
+			setHistory((prev) => [...prev, ...items]);
+			setHistoryCursor(nextCursor);
+		} catch (e) {
+			setError(e.message);
+		} finally {
+			setHistoryLoadingMore(false);
+		}
+	}, [historyCursor, historyLoadingMore]);
 
 	useEffect(() => {
 		loadCollections();
@@ -163,7 +184,17 @@ export function PostmanWorkspace({ account, onLogout }) {
 		setError("");
 	}
 
-	function handleSelectHistory(entry) {
+	async function handleSelectHistory(summary) {
+		// The sidebar list only carries lightweight summaries now (id, method,
+		// url, status, time, size, createdAt) — no headers/body — so the full
+		// entry has to be fetched before it can be reloaded into the builder.
+		let entry;
+		try {
+			entry = await historyApi.getById(summary._id);
+		} catch (e) {
+			setError(e.message);
+			return;
+		}
 		// History has no params field of its own (it only ever records the final,
 		// merged URL that was actually sent) — hydrate params from that URL's
 		// query string here, the same way typing/pasting a URL does, so the base
@@ -215,6 +246,7 @@ export function PostmanWorkspace({ account, onLogout }) {
 				setConfirmDialog(null);
 				await historyApi.clear();
 				setHistory([]);
+				setHistoryCursor(null);
 			},
 		});
 	}
@@ -323,6 +355,9 @@ export function PostmanWorkspace({ account, onLogout }) {
 			<Sidebar
 				collections={collections}
 				history={history}
+				historyHasMore={Boolean(historyCursor)}
+				historyLoadingMore={historyLoadingMore}
+				onLoadMoreHistory={loadMoreHistory}
 				activeRequestId={activeRequestId}
 				onSelectRequest={handleSelectRequest}
 				onCreateCollection={handleCreateCollection}

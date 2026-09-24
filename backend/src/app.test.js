@@ -125,8 +125,8 @@ describe("request history URL fidelity (live HTTP)", () => {
 		});
 
 		const historyResponse = await authed("/history");
-		const { data: history } = await historyResponse.json();
-		const latest = history[0];
+		const { data } = await historyResponse.json();
+		const latest = data.items[0];
 
 		expect(latest.url).toBe(`${sandboxGetUrl}?foo=bar`);
 		expect(latest.url).not.toContain("skip");
@@ -136,5 +136,104 @@ describe("request history URL fidelity (live HTTP)", () => {
 		// carries the full, accurate request that was actually sent.
 		const reloadedUrl = new URL(latest.url);
 		expect(reloadedUrl.searchParams.get("foo")).toBe("bar");
+	});
+});
+
+describe("history list/detail scalability (live HTTP)", () => {
+	test("the list endpoint never returns request/response bodies or headers", async () => {
+		await authed("/proxy", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ method: "GET", url: `${baseUrl}/sandbox/get`, headers: [], params: [], body: "", bodyType: "none", auth: { type: "none" } }),
+		});
+
+		const { data } = await (await authed("/history")).json();
+		const latest = data.items[0];
+
+		expect(latest.method).toBe("GET");
+		expect(latest.url).toContain("/sandbox/get");
+		expect(latest.status).toBe(200);
+		expect(latest).not.toHaveProperty("requestBody");
+		expect(latest).not.toHaveProperty("responseBody");
+		expect(latest).not.toHaveProperty("requestHeaders");
+		expect(latest).not.toHaveProperty("responseHeaders");
+	});
+
+	test("GET /history/:id returns the full entry, including the response body the list endpoint omits", async () => {
+		const { data: listData } = await (await authed("/history")).json();
+		const summary = listData.items[0];
+
+		const { data: detail } = await (await authed(`/history/${summary._id}`)).json();
+
+		expect(detail._id).toBe(summary._id);
+		expect(typeof detail.responseBody).toBe("string");
+		expect(detail.responseBody.length).toBeGreaterThan(0);
+	});
+
+	test("cursor pagination returns distinct pages in newest-first order with no gaps or repeats, and a null cursor on the last page", async () => {
+		for (let i = 0; i < 3; i++) {
+			await authed("/proxy", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ method: "GET", url: `${baseUrl}/sandbox/status/20${i}`, headers: [], params: [], body: "", bodyType: "none", auth: { type: "none" } }),
+			});
+		}
+
+		const page1 = (await (await authed("/history?limit=2")).json()).data;
+		expect(page1.items).toHaveLength(2);
+		expect(page1.nextCursor).not.toBeNull();
+
+		const page2 = (await (await authed(`/history?limit=2&cursor=${encodeURIComponent(page1.nextCursor)}`)).json()).data;
+		expect(page2.items.length).toBeGreaterThan(0);
+
+		const page1Ids = page1.items.map((i) => i._id);
+		const page2Ids = page2.items.map((i) => i._id);
+		expect(page1Ids.some((id) => page2Ids.includes(id))).toBe(false);
+
+		// createdAt must be non-increasing across the whole combined sequence.
+		const allTimes = [...page1.items, ...page2.items].map((i) => new Date(i.createdAt).getTime());
+		for (let i = 1; i < allTimes.length; i++) expect(allTimes[i]).toBeLessThanOrEqual(allTimes[i - 1]);
+	});
+});
+
+describe("history response-body truncation (direct service call, no HTTP)", () => {
+	test("a response body over 1 MB is truncated on write and flagged; a small one is stored whole and unflagged", async () => {
+		const { historyService } = await import("./features/history/history.service.js");
+		const { historyRepository } = await import("./features/history/history.repository.js");
+
+		const big = "x".repeat(1024 * 1024 + 500);
+		const saved = await historyService.record("000000000000000000000001", {
+			method: "GET",
+			url: "http://example.com/big",
+			requestHeaders: {},
+			requestBody: "",
+			status: 200,
+			responseTime: 1,
+			responseHeaders: {},
+			responseBody: big,
+			responseSize: big.length,
+			error: null,
+		});
+
+		const stored = await historyRepository.findById(saved._id, "000000000000000000000001");
+		expect(stored.responseBody.length).toBe(1024 * 1024);
+		expect(stored.responseBodyTruncated).toBe(true);
+		// responseSize keeps reflecting the real, untruncated size.
+		expect(stored.responseSize).toBe(big.length);
+
+		const small = await historyService.record("000000000000000000000001", {
+			method: "GET",
+			url: "http://example.com/small",
+			requestHeaders: {},
+			requestBody: "",
+			status: 200,
+			responseTime: 1,
+			responseHeaders: {},
+			responseBody: "ok",
+			responseSize: 2,
+			error: null,
+		});
+		expect(small.responseBodyTruncated).toBe(false);
+		expect(small.responseBody).toBe("ok");
 	});
 });

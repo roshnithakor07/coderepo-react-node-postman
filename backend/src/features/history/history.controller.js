@@ -2,7 +2,17 @@ import { historyService } from "./history.service.js";
 
 export async function listHistory(request, response, next) {
 	try {
-		response.json({ data: await historyService.list(request.account._id) });
+		const limit = Math.min(Math.max(Number(request.query.limit) || 50, 1), 100);
+		const data = await historyService.list(request.account._id, { limit, cursor: request.query.cursor || null });
+		response.json({ data });
+	} catch (error) {
+		next(error);
+	}
+}
+
+export async function getHistoryEntry(request, response, next) {
+	try {
+		response.json({ data: await historyService.getById(request.params.id, request.account._id) });
 	} catch (error) {
 		next(error);
 	}

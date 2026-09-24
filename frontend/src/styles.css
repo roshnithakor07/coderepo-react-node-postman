@@ -242,6 +242,10 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px
 .s4xx { color: var(--s4xx); background: var(--s4xx-bg); }
 .s5xx { color: var(--s5xx); background: var(--s5xx-bg); }
 .serr { color: var(--danger); background: var(--danger-bg); }
+.history-load-more-btn { width: 100%; height: 30px; margin-top: 6px; border: 1px solid var(--border-default); border-radius: var(--radius-md); background: transparent; color: var(--primary); font-size: 11px; font-weight: 600; transition: all var(--t-fast); }
+.history-load-more-btn:hover:not(:disabled) { border-color: var(--primary); background: var(--primary-dim); }
+.history-load-more-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--primary-dim); }
+.history-load-more-btn:disabled { color: var(--text-tertiary); cursor: default; opacity: 0.7; }
 .history-clear-btn { width: 100%; height: 30px; margin-top: 6px; border: 1px solid var(--border-default); border-radius: var(--radius-md); background: transparent; color: var(--text-tertiary); font-size: 11px; font-weight: 600; transition: all var(--t-fast); }
 .history-clear-btn:hover { border-color: var(--danger); color: var(--danger); background: var(--danger-bg); }
 .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 36px 16px; gap: 10px; color: var(--text-tertiary); text-align: center; }
