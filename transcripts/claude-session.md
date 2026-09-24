@@ -3576,3 +3576,55 @@ Also re-verified the >2MB size fallback directly (via a mocked 2.7 MB and 60 MB-
 `bun test` (21/21 pass), `cd frontend && bun run build` (succeeded), `git diff --check` (clean) all re-run and passing after this fix.
 
 **Status:** Awaiting approval (again).
+
+---
+
+### Update — virtualization rewrite (commits `ac06c7d`, `3780a6d`)
+
+Not approved: two freezes remained on `/photos` even after the chunking fix — (1) clicking "Show all (5000)" froze the UI, (2) reverse search (↑ / Shift+Enter, especially wrapping from the first match to the last) froze.
+
+**Cause of both, measured before rewriting:**
+- "Show all" set the array's chunk window to 5000, which is exactly the same class of problem chunking was supposed to prevent — it just moved the threshold for triggering a giant synchronous render from "on load" to "on this one button."
+- Reverse-search-wraps-to-last hit the *other* leftover chunking mechanism: revealing a match required widening the array's visible window up to that match's index, and the very last match of a query is (by definition) near the end of the array — wrapping to it forced nearly full-array rendering again.
+- Both are the same root problem: chunking still couples "how much is revealed" to "how much gets rendered." Fixing it needed removing that coupling entirely, not tuning the chunk size.
+
+**Fix — replaced chunking with virtualization** (new `jsonTree.js`, rewritten `JsonView.jsx`, `jsonSearch.js`, `ResponseViewer.jsx`):
+- `jsonTree.js#flattenTree()` turns the parsed value + a `Set` of expanded paths into a flat, ordered array of one-row-per-line objects — pure, `useMemo`-computed, and still short-circuits on a collapsed container exactly like before (so flattening cost scales with what's *expanded*, not total response size — flattening all ~35,000 rows of a fully-expanded `/photos` is a plain JS walk with no DOM involved, measured at well under 50ms).
+- `JsonView.jsx` renders only the rows inside the current scroll viewport + a 12-row overscan, via a fixed `ROW_HEIGHT` (20px) and a translated absolute-positioned window inside a full-height spacer — the *existing* `.response-body-wrap` scroll container drives it (via a `scrollContainerRef` passed down), not a second nested scrollable area. This is what actually fixes both freezes: DOM node count is now bounded by viewport height, never by how much is logically expanded or how far into the array a match sits.
+- Expand/collapse state (`expandedPaths`) moved from JsonView-local to controlled-by-`ResponseViewer`, because both the new Expand-all/Collapse-all toolbar and search's jump-to-match need to drive it from outside the tree. `jsonTree.js#collectAllContainerPaths()` (a one-time full-tree walk, only run on the explicit "Expand all" click, never automatically) backs the toolbar.
+- `jsonSearch.js#findJsonMatches()` now returns an ordered array of `{path, ancestorPaths}` instead of the old "which paths to force-expand / how far to widen each array" model. Jumping to a match expands *only that match's own* ancestor chain (a handful of paths, not the whole array) — this is what makes reverse-wrap instant regardless of the match's index, and it also meant the earlier round's `EXPAND_CAP` safety net could be deleted entirely: there was never anything left to need capping once "reveal everything at once" was removed as a concept. Match granularity also changed deliberately: one match is now one leaf/key whose value contains the query (not one per substring occurrence within it) — with jump-to-match navigation, "one match = one row to visit" is the useful unit; multiple occurrences inside the same row are all visible together the instant you scroll to it.
+- Chunking's "Show 100 more" / "Show all (N)" UI was removed entirely, replaced by the Expand-all/Collapse-all toolbar — with true virtualization, an expanded array of any size costs the same to render as a small one (only the viewport mounts), so partial reveal no longer serves a performance purpose, and always showing the full array once expanded is a better, more predictable UX than an artificial per-click reveal.
+- Long values ellipsize (`white-space: nowrap; overflow: hidden; text-overflow: ellipsis` on each fixed-height row) with the full value as a native `title` tooltip, per the two allowed options.
+- Self-written throughout, no library — a fixed-row-height virtual list is a well-understood, small technique, and every row here already is a fixed-height text line, which is exactly the case hand-rolling suits.
+
+**A real bug found and fixed *during* this rewrite:** the first version keyed each rendered row by `row.path` alone. An expanded container contributes two rows — an "open" line and a "close" line — that legitimately share the same `path`, which produced React "duplicate key" warnings for every expanded container and, more importantly, visibly incorrect row content during scroll (React reusing/misapplying a DOM node between the colliding keys) — confirmed by literally seeing `"Collapse all"` leave 10 stale rows on screen instead of the correct 1 until this was fixed. Fixed by keying on `${row.path}:${row.type}` instead, which is unique for every row by construction.
+
+**The 386ms-vs-3–4s gap, investigated as asked — the cause was not parse or flatten:**
+- Measured directly in-browser: `JSON.parse` of the actual ~1.05 MB `/photos` payload took **~2.7ms**; the one-time `computeDefaultExpanded()` walk over its ~5001 containers took **~1.4ms**. Neither is a meaningful contributor.
+- Instrumented the real network request instead (via Playwright's request/response timing on `/api/v1/proxy`): a consistent **~150–950ms gap** remained between "network response received" and "status badge visible" — squarely in frontend responsibility.
+- Found it: `App.jsx`'s `handleSend()` does `await loadHistory()` between `setResponse(result)` and the `finally { setSending(false) }` that clears the loading state — so the response stays hidden behind the loading spinner until the *History* list also finishes refetching. Checked what that refetch actually costs right now: `GET /api/v1/history` for this account currently returns **26 MB** (this session's own accumulated test history, including full bodies from every earlier `/photos` request), and parsing/transferring that dwarfs the actual ~1 MB proxy response it's nominally waiting alongside.
+- Fixed with the smallest possible change (`App.jsx`, 1 line): `loadHistory()` is no longer awaited — it already has its own internal `try`/`catch`, so this can't produce an unhandled rejection, and firing it without blocking means the History sidebar still updates, just without holding the response viewer hostage to it. This is a pre-existing characteristic of the send flow, unrelated to anything else in this branch, but it was "in our code" and directly responsible for the reported gap, so fixed per the instruction to fix it if that's where the time was going.
+- This account's 26 MB history is itself a pre-existing side effect of this session's own repeated large-response testing, not a new problem introduced here — flagged for awareness, not touched further (out of scope for this branch, which is about the response *viewer*, not the history *storage model*).
+
+**Before / after (measured against the live `/photos` endpoint, several runs each to account for real network variance to the external test API):**
+
+| Scenario | Before this round | After |
+|---|---|---|
+| Click Send → status badge visible | ~3–4s (mostly ~2s real network + ~0.15–1.5s frontend gap) | ~1.2–3.7s (now almost entirely real network latency to jsonplaceholder.typicode.com, which itself varied 0.85–2.4s across runs; frontend-processing gap down to ~150–200ms typically) |
+| Click "Show all (5000)" | Froze | N/A — removed; "Expand all" (equivalent, now safe) takes ~450ms with zero freeze |
+| Expand all (5000 items → ~35,000 rows) | froze (old chunking didn't cover this action) | ~450–470ms, smooth |
+| Collapse all | froze | ~245–250ms, smooth |
+| Reverse search wrap (match 1 → last of 416, "ad") | froze | ~310ms |
+| Holding/rapid Enter through 15 matches | untested previously | ~900ms total (~60ms/match), no freeze |
+| Scrolling 20,000px / 500,000px into an expanded tree | N/A (old design couldn't reach this state safely) | 39–44 DOM rows mounted regardless of scroll depth |
+
+**Acceptance test — all five re-verified via Playwright against the live app:**
+1. `/photos` renders fast (root visible, collapsed, ~1 row) and scrolling stays smooth (bounded DOM at any scroll depth). ✓
+2. Expand all → ~450ms, smooth; Collapse all → ~245ms, smooth. ✓
+3. Search "ad" (416 matches) — ↑ from match 1 wraps to match 416 in ~310ms; 15 rapid Enters cycle in ~900ms with no freeze. ✓
+4. Keyboard focus (native `<button>` Enter/Space activation on toggles, confirmed), text selection/copy (no crash, normal browser behavior on real DOM text), search highlighting (color-correct `<mark>`), Raw/Headers/Save-as-file — all still work. ✓
+5. Small responses (the existing sandbox echo requests) — fully auto-expanded, identically colored, identical row count/behavior to before this round; full regression pass (Send, Save-to-collection, Collections, History, Environments, Snippets, Clear Response, sidebar 290px) re-verified passing with zero console errors (including the duplicate-key warnings, now gone). ✓
+
+`bun test` (21/21), `cd frontend && bun run build`, and `git diff --check` all re-run and passing.
+
+**Status:** Awaiting approval (again).
