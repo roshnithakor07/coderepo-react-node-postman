@@ -136,6 +136,21 @@ export function ResponseViewer({ response, sending, request, activeEnvironmentId
 		if (searchOpen) marks[currentMatch]?.scrollIntoView({ block: "center" });
 	}, [currentMatch, searchOpen, searchQuery, activeTab, response]);
 
+	// Plain client-side download — no dependency needed for a Blob + object
+	// URL + a programmatic <a download>.
+	function saveResponseAsFile() {
+		if (!response?.body) return;
+		const blob = new Blob([response.body], { type: "application/json" });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement("a");
+		a.href = url;
+		a.download = `response-${Date.now()}.json`;
+		document.body.appendChild(a);
+		a.click();
+		a.remove();
+		URL.revokeObjectURL(url);
+	}
+
 	const closeSearch = useCallback(() => { setSearchOpen(false); setSearchQuery(""); }, []);
 	const toggleSearch = useCallback(() => {
 		if (searchOpen) { closeSearch(); return; }
@@ -233,6 +248,16 @@ export function ResponseViewer({ response, sending, request, activeEnvironmentId
 							title="Search response (Ctrl+F)"
 						>
 							🔍
+						</button>
+					)}
+					{!response.error && (
+						<button
+							className="icon-btn"
+							onClick={saveResponseAsFile}
+							disabled={!response.body}
+							title={response.body ? "Save response as .json" : "No response body to save"}
+						>
+							⭳
 						</button>
 					)}
 					<button
