@@ -376,6 +376,26 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px
 .response-error { padding: 16px; color: var(--danger); font-size: 13px; line-height: 1.6; display: flex; flex-direction: column; gap: 6px; }
 .response-error strong { font-size: 14px; font-weight: 700; }
 
+/* ─── JSON tree view (Pretty tab) ─── */
+.response-body-json { white-space: normal; word-break: normal; }
+.json-view { display: inline; }
+.json-children { padding-left: 18px; border-left: 1px solid var(--border-subtle); margin-left: 3px; }
+.json-row { white-space: pre-wrap; word-break: break-word; }
+.json-punct { color: var(--text-secondary); }
+.json-key { color: var(--info); }
+.json-string { color: var(--success); }
+.json-number { color: var(--warning); }
+.json-bool { color: var(--patch); }
+.json-null { color: var(--text-tertiary); }
+.json-toggle { display: inline-grid; place-items: center; width: 14px; height: 14px; vertical-align: middle; margin-right: 2px; border-radius: 3px; color: var(--text-tertiary); transition: all var(--t-fast); }
+.json-toggle:hover { background: var(--bg-hover); color: var(--text-primary); }
+.json-toggle:focus-visible { outline: 2px solid var(--focus-border); outline-offset: 1px; }
+.json-caret { display: inline-block; font-size: 8px; transition: transform var(--t-fast) var(--ease); }
+.json-caret.open { transform: rotate(90deg); }
+.json-collapsed-summary { color: var(--text-tertiary); font-family: var(--font-mono); font-size: 11px; font-style: italic; padding: 0 3px; border-radius: 3px; transition: all var(--t-fast); }
+.json-collapsed-summary:hover { background: var(--bg-hover); color: var(--text-secondary); }
+.json-collapsed-summary:focus-visible { outline: 2px solid var(--focus-border); outline-offset: 1px; }
+
 /* ─── Headers table ─── */
 .headers-table { width: 100%; border-collapse: collapse; }
 .headers-table th { padding: 7px 14px; text-align: left; border-bottom: 1px solid var(--border-subtle); font-size: 10px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: var(--text-tertiary); background: var(--bg-panel); }

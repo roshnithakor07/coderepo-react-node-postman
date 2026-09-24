@@ -1,5 +1,6 @@
-import { useState, useCallback, useEffect, useRef } from "react";
-import { statusClass, formatSize, formatTime, tryFormatJson } from "../../shared/utils/format.js";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import { statusClass, formatSize, formatTime, tryFormatJson, isJson } from "../../shared/utils/format.js";
+import { JsonView } from "./JsonView.jsx";
 
 function SnippetPanel({ request, activeEnvironmentId, onGenerateSnippet }) {
 	const [lang, setLang] = useState("curl");
@@ -72,6 +73,14 @@ export function ResponseViewer({ response, sending, request, activeEnvironmentId
 	const statusCls = response ? statusClass(response.status) : "serr";
 	const prettyBody = useCallback(() => (response?.body ? tryFormatJson(response.body) : ""), [response?.body]);
 	const headerEntries = response?.headers ? Object.entries(response.headers) : [];
+	// Only a JSON body gets the tree view; anything else (HTML, XML, plain
+	// text) keeps the existing flat <pre> — JsonView has nothing to render
+	// for a non-object/array payload anyway.
+	const parsedJson = useMemo(() => {
+		if (!response?.body || !isJson(response.body)) return undefined;
+		const value = JSON.parse(response.body);
+		return value !== null && typeof value === "object" ? value : undefined;
+	}, [response?.body]);
 
 	const SnippetToggle = (
 		<button
@@ -165,7 +174,11 @@ export function ResponseViewer({ response, sending, request, activeEnvironmentId
 										))}
 									</div>
 									<div className="response-body-wrap" role="tabpanel">
-										{activeTab === "Pretty"  && <pre className="response-body">{prettyBody() || <span style={{ color: "var(--text-tertiary)" }}>Empty response body</span>}</pre>}
+										{activeTab === "Pretty"  && (
+											parsedJson !== undefined
+												? <div className="response-body response-body-json"><JsonView value={parsedJson} /></div>
+												: <pre className="response-body">{prettyBody() || <span style={{ color: "var(--text-tertiary)" }}>Empty response body</span>}</pre>
+										)}
 										{activeTab === "Raw"     && <pre className="response-body">{response.body || <span style={{ color: "var(--text-tertiary)" }}>Empty response body</span>}</pre>}
 										{activeTab === "Headers" && (
 											<table className="headers-table">
