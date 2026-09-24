@@ -122,6 +122,23 @@ function JsonRow({ row, highlight, onToggle }) {
 // specific path into view once it's expanded (scrollNonce should change on
 // every navigation — even to the same path twice — so the effect reliably
 // re-fires; ResponseViewer passes the current match index for this).
+// How far the json-view root's top edge sits below the scroll container's
+// top edge, in the container's scrolled content coordinates. Deliberately
+// NOT `root.offsetTop`: that's relative to `root`'s nearest *positioned*
+// ancestor (its offsetParent), which is only guaranteed to be the scroll
+// container if the container itself has non-static positioning — it
+// doesn't here, so offsetTop silently measured against the wrong element
+// and both scrolling-to-a-match and (more subtly) the viewport-range math
+// were computing garbage off of it. getBoundingClientRect() differences are
+// pure viewport geometry and don't depend on any CSS positioning setup at
+// all, so this is correct regardless of what ancestors do or don't have
+// `position` set.
+function rootOffsetWithinContainer(container, root) {
+	const containerRect = container.getBoundingClientRect();
+	const rootRect = root.getBoundingClientRect();
+	return container.scrollTop + (rootRect.top - containerRect.top);
+}
+
 export function JsonView({ value, expandedPaths, onToggle, highlight = identity, scrollContainerRef, scrollToPath, scrollNonce }) {
 	const flatRows = useMemo(() => flattenTree(value, expandedPaths), [value, expandedPaths]);
 	const rootRef = useRef(null);
@@ -131,7 +148,8 @@ export function JsonView({ value, expandedPaths, onToggle, highlight = identity,
 		const container = scrollContainerRef.current;
 		const root = rootRef.current;
 		if (!container || !root) return;
-		const relativeScroll = Math.max(0, container.scrollTop - root.offsetTop);
+		const rootOffset = rootOffsetWithinContainer(container, root);
+		const relativeScroll = Math.max(0, container.scrollTop - rootOffset);
 		const start = Math.max(0, Math.floor(relativeScroll / ROW_HEIGHT) - OVERSCAN);
 		const visibleRowCount = Math.ceil(container.clientHeight / ROW_HEIGHT) + OVERSCAN * 2;
 		setRange(prev => {
@@ -166,7 +184,7 @@ export function JsonView({ value, expandedPaths, onToggle, highlight = identity,
 		const container = scrollContainerRef.current;
 		const root = rootRef.current;
 		if (!container || !root) return;
-		const targetTop = root.offsetTop + idx * ROW_HEIGHT;
+		const targetTop = rootOffsetWithinContainer(container, root) + idx * ROW_HEIGHT;
 		const center = targetTop - container.clientHeight / 2 + ROW_HEIGHT / 2;
 		container.scrollTo({ top: Math.max(0, center) });
 		// eslint-disable-next-line react-hooks/exhaustive-deps

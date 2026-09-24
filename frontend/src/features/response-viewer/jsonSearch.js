@@ -47,6 +47,15 @@ export function findJsonMatches(root, rawQuery) {
 	return { count: matches.length, matches };
 }
 
+// Pure next/prev-with-wrap index math for search navigation — extracted so
+// it's independently testable (see jsonSearch.test.js) rather than only
+// exercised indirectly through the UI. `total === 0` returns 0 rather than
+// dividing by zero (there's nothing to navigate to).
+export function nextMatchIndex(current, delta, total) {
+	if (total <= 0) return 0;
+	return (current + delta + total) % total;
+}
+
 // Same query semantics, applied to flat text (the Raw tab, or a non-JSON
 // Pretty body) instead of a parsed tree — just an occurrence count, no
 // paths to expand.

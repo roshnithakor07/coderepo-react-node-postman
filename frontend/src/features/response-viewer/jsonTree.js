@@ -4,8 +4,8 @@
 // transformation, safe to call from useMemo and safe under React 18
 // StrictMode's double-invoke (see transcripts/02-design-decisions.md).
 
-export const DEFAULT_EXPAND_DEPTH = 2; // depths 0 and 1 auto-expand; depth >= 2 auto-collapses
-export const MAX_ENTRIES_AUTO_EXPANDED = 100; // a container bigger than this starts collapsed regardless of depth
+export const SMALL_RESPONSE_NODE_THRESHOLD = 500; // below this many total nodes, expand everything (like Postman)
+export const MAX_ENTRIES_AUTO_EXPANDED = 100; // a first-level container bigger than this starts collapsed anyway
 
 function containerEntries(value) {
 	const isArray = Array.isArray(value);
@@ -13,29 +13,53 @@ function containerEntries(value) {
 	return { isArray, entries };
 }
 
-function defaultExpanded(depth, entryCount) {
-	return depth < DEFAULT_EXPAND_DEPTH && entryCount <= MAX_ENTRIES_AUTO_EXPANDED;
+// How many rows flattenTree would produce if *everything* were expanded —
+// the "is this response small or large" measure. A plain counting walk, no
+// row objects allocated, no DOM — cheap even for a huge response (see
+// transcripts/claude-session.md for the measured cost on the /photos shape).
+function countTotalNodes(value) {
+	if (value === null || typeof value !== "object") return 1;
+	const { entries } = containerEntries(value);
+	if (entries.length === 0) return 1;
+	let count = 1;
+	for (const [, v] of entries) count += countTotalNodes(v);
+	return count;
 }
 
-// One-time walk (called once per response, via a lazy useState initializer —
-// see JsonView) that decides which containers start expanded. Cost is
-// proportional to the number of *containers* in the whole response (~5000
-// for the /photos endpoint's array-of-objects shape), not the number of
-// DOM nodes ever created — a plain JS walk with no rendering, measured at a
-// few milliseconds even for that shape (see transcripts/claude-session.md
-// for the measured number).
+// Decides which containers start expanded for a brand new response — called
+// once per response (see ResponseViewer's render-phase state adjustment,
+// not a useEffect, so a new response never paints one frame with the
+// *previous* response's expansion first). Rules, in order:
+//   1. The root always starts expanded, regardless of size — the user
+//      should never be dead-ended behind a single collapsed summary line.
+//   2. A genuinely small response (< SMALL_RESPONSE_NODE_THRESHOLD total
+//      nodes) starts fully expanded, matching Postman's own default.
+//   3. Otherwise ("large"): root plus, for an *object* root, each first-
+//      level property that is itself a container also starts expanded,
+//      unless that property is itself "big" (> MAX_ENTRIES_AUTO_EXPANDED
+//      entries), which stays collapsed. For an *array* root (e.g. the
+//      5000-item /photos shape), only the root itself expands — auto-
+//      expanding every individual item would mean "large" responses end up
+//      exactly as expanded as "small" ones by default, which defeats the
+//      distinction the size threshold exists to draw. Root being open is
+//      what actually matters: the user sees "[" immediately and can expand
+//      individual items from there, rather than starting behind one opaque
+//      "5000 items" line.
 export function computeDefaultExpanded(root) {
-	const expanded = new Set();
-	function walk(value, path, depth) {
-		if (value === null || typeof value !== "object") return;
-		const { isArray, entries } = containerEntries(value);
-		if (entries.length === 0) return;
-		if (defaultExpanded(depth, entries.length)) {
-			expanded.add(path);
-			for (const [key, val] of entries) walk(val, `${path}.${key}`, depth + 1);
+	if (root === null || typeof root !== "object") return new Set();
+	const { isArray, entries } = containerEntries(root);
+	if (entries.length === 0) return new Set();
+
+	if (countTotalNodes(root) < SMALL_RESPONSE_NODE_THRESHOLD) return collectAllContainerPaths(root);
+
+	const expanded = new Set(["$"]);
+	if (!isArray) {
+		for (const [key, val] of entries) {
+			if (val === null || typeof val !== "object") continue;
+			const { entries: childEntries } = containerEntries(val);
+			if (childEntries.length > 0 && childEntries.length <= MAX_ENTRIES_AUTO_EXPANDED) expanded.add(`$.${key}`);
 		}
 	}
-	walk(root, "$", 0);
 	return expanded;
 }
 

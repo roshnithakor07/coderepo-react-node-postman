@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { statusClass, formatSize, formatTime, tryFormatJson, isJson } from "../../shared/utils/format.js";
 import { JsonView } from "./JsonView.jsx";
-import { findJsonMatches, countTextMatches } from "./jsonSearch.js";
+import { findJsonMatches, countTextMatches, nextMatchIndex } from "./jsonSearch.js";
 import { computeDefaultExpanded, collectAllContainerPaths } from "./jsonTree.js";
 
 // Above this size, the JSON tree defaults to collapsed/off in favor of Raw —
@@ -261,7 +261,7 @@ export function ResponseViewer({ response, sending, request, activeEnvironmentId
 		requestAnimationFrame(() => searchInputRef.current?.focus());
 	}, [searchOpen, closeSearch]);
 	const goToMatch = useCallback((delta) => {
-		setCurrentMatch(m => matchTotal === 0 ? 0 : (m + delta + matchTotal) % matchTotal);
+		setCurrentMatch(m => nextMatchIndex(m, delta, matchTotal));
 	}, [matchTotal]);
 
 	// Ctrl/Cmd+F opens the in-response search instead of the browser's own
