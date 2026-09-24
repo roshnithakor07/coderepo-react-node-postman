@@ -3536,4 +3536,43 @@ parent_agent=none
 - Search is scoped to the Pretty and Raw tabs only; the Headers tab (a table, not text) is intentionally not searched — flagged as a scoping choice, not an oversight.
 - No lint script exists in this project (confirmed via `package.json`); "lint clean" was satisfied by `bun run build`'s own compile step plus manual review, since there's nothing to run.
 
-**Status:** Awaiting approval.
+---
+
+### Update — performance fix (`fix/perf` commit `b9cd603`)
+
+Not approved: the UI froze on large responses (e.g. `GET https://jsonplaceholder.typicode.com/photos`, 5000 items / ~1.1 MB).
+
+**Cause, measured before touching any code:**
+- Pure backend proxy round-trip (network fetch + re-stringify, no frontend involved) for the `/photos` response: **~2.0s**, measured with a direct `curl` to `/api/v1/proxy`.
+- The same request through the UI, timed from click to the status badge becoming visible: **~19.5s**.
+- The ~17.5s gap was the frontend, not the network. `JsonView`'s `collapsed` state started as an empty `Set` — nothing collapsed by default — so the very first render of a 5000-item array synchronously created and committed **~55,000 DOM nodes** in one blocking React render pass (confirmed by counting rendered leaf/node elements once it finally painted). The status badge, part of the same commit, couldn't paint until that whole synchronous tree finished.
+- A second, related freeze was found and fixed *during* this task, not anticipated up front: the first version of "auto-expand paths containing a search match" extended an array's visible *window* up to the highest matching index. Searching "accusamus" against `/photos` matches indices 0 through 4991 — extending the window to cover index 4991 meant rendering practically the entire 5000-item array again, and search took **14.9s**.
+
+**Fix (all in `JsonView.jsx` / new `jsonSearch.js` / `ResponseViewer.jsx`):**
+- Smart default expansion: a container auto-expands only at depth 0–1, and *any* container (regardless of depth) with more than ~100 entries starts collapsed. A collapsed node's children are never rendered — not CSS-hidden, simply absent from the returned tree — so cost scales with what's visible, not with response size.
+- Chunking: an expanded array renders a 100-item window plus "Show 100 more" / "Show all (N)" controls, rather than every item at once.
+- Search now runs against the *parsed* JSON value via a pure, `useMemo`-computed `findJsonMatches()` in the new `jsonSearch.js` (not the DOM, not a ref mutated during render — kept correct under StrictMode per the existing design-decisions note), the query is debounced 200ms, and — the fix for the second freeze — a match's array ancestor is revealed by adding *only that specific index* to what's shown (union of the normal chunk window + the sparse matched indices), never by widening the window to reach it. A small "⋯ N items skipped" separator marks the gap. An `EXPAND_CAP` (300) bounds how many matches get auto-revealed on an even broader query, without capping the reported total count's accuracy.
+- Size fallback: a response over 2 MB (`response.size`) defaults to the Raw tab and shows a "Large response — tree view may be slow" notice with a "View as tree anyway" button in place of the tree on the Pretty tab; opting in is still instant because the same collapsed-by-default rule applies.
+- `parsedJson` was already `useMemo`-keyed on `response.body` before this fix (parsed once per response, not per render) — confirmed unchanged, no redundant parse was introduced.
+
+**Before / after (all measured with Playwright against the real `/photos` endpoint, not simulated):**
+
+| Scenario | Before | After |
+|---|---|---|
+| Click Send → status badge visible | ~19.5s | ~3.1–4.0s (now ≈ the ~2s backend/network round-trip; root array renders as a single collapsed `5000 items` node) |
+| Expand root array | froze with the rest | ~650–700ms to reveal 601 rows (first 100 items + their fields) |
+| Collapse root again | froze with the rest | ~130–180ms |
+| Search "accusamus" (126 matches, spread 0–4991) | 14.9s | ~550–750ms (incl. the 200ms debounce), max single keystroke 182ms while typing |
+| Small response (existing sandbox echo) | N/A | Unchanged — fully auto-expanded, identical to the pre-perf-fix behavior, since nothing here exceeds the depth/count thresholds |
+
+**Acceptance test — all four re-verified after the fix, via Playwright against the live app:**
+1. `/photos` renders (root visible, collapsed) in ~3–4s total including ~2s of real network/backend time; scrolling is smooth (nothing large is mounted until expanded). ✓
+2. Expand/collapse the root repeatedly — no freeze (sub-second each time). ✓
+3. Search "accusamus" — count ("1 of 126") appears in under a second; typing stays smooth (max 182ms per keystroke, well under a perceptible stutter). ✓
+4. Small responses (the existing sandbox echo requests used throughout this session) — fully auto-expanded exactly as before this fix, all commands/regressions (Send, Save, Collections, History, Environments, Snippets, Raw, Headers, Clear Response, sidebar 290px) re-verified passing with zero console errors.
+
+Also re-verified the >2MB size fallback directly (via a mocked 2.7 MB and 60 MB-equivalent-item-count response, since the real `/photos` endpoint is ~1.1 MB and doesn't reach the threshold): Raw becomes the default tab, the Pretty tab shows the large-response notice instead of the tree, and "View as tree anyway" opts in instantly (~86ms) because the oversized root array still starts collapsed by the same default rule.
+
+`bun test` (21/21 pass), `cd frontend && bun run build` (succeeded), `git diff --check` (clean) all re-run and passing after this fix.
+
+**Status:** Awaiting approval (again).
