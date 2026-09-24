@@ -123,7 +123,10 @@ export function PostmanWorkspace({ account, onLogout }) {
 			const activeEnv = environments.find((e) => e.isActive);
 			const result = await proxyApi.send({ ...request, environmentId: activeEnv?._id });
 			if (requestGenerationRef.current === generation) setResponse(result);
-			await loadHistory();
+			// Deliberately not awaited: refreshing the History sidebar shouldn't
+			// hold the response on screen waiting for it. loadHistory has its own
+			// internal try/catch, so this can't produce an unhandled rejection.
+			loadHistory();
 		} catch (e) {
 			if (requestGenerationRef.current === generation) setError(e.message);
 		} finally {
