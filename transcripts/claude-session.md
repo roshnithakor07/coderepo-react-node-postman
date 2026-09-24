@@ -3688,3 +3688,22 @@ User confirmed the proposal with two changes to it: cursor pagination on `(creat
 `bun test` (41/41), `cd frontend && bun run build`, `git diff --check` all passing.
 
 **Status:** Awaiting approval (again) — all three issues from this round now addressed, pending your click-through since I have no browser tool available in this session to do it myself.
+
+---
+
+### Update — browser click-through of the full acceptance list (no code changes)
+
+A Playwright browser was available this round, so the UI click-through the previous update couldn't do has now been done. The Playwright MCP server was configured for Google Chrome, which isn't installed, so the same checks ran as a headless `playwright-core` script against the bundled Chromium 1243. It drove the real dev servers (:3000/:8000) as `alex.rivera@postman.dev` against the real `jsonplaceholder.typicode.com`. The scripts stayed in the session scratchpad and are not committed. To exercise pagination, 45 extra `GET /todos/N` requests went through `/api/v1/proxy`, taking the account from 15 history entries to 60.
+
+| # | Item | Result | Evidence |
+|---|---|---|---|
+| 1 | Default expansion | PASS | `/todos/1`: 6 rows, 0 collapsed. `POST /photos`: `{ "id": 5001 }` fully expanded. `/users` (10 nested objects, under 500 nodes): 0 collapsed. `/photos`: root `[` open, items `{5 keys}` collapsed; Send → rendered in 1.47s. |
+| 2 | Search ↑/↓ + wrap | PASS | `/photos` "ad": 1 of 416 → ↑ → **416 of 416** (165ms) → ↓ → 1 of 416 → ↓ → 2 of 416; Shift+Enter back to 1; 30× Enter → 31 of 416 (no drops, ~72ms/step including Playwright overhead). `/users` "an": 1↔26 wrap both ways; 30× Enter lands on 5 of 26 (31 mod 26). The active match is always inside the viewport and vertically centred (offset 0px), except matches near the top, where scrollTop clamps at 0. Active match background `rgb(251,191,36)` vs `rgba(251,191,36,0.1)` for the others. |
+| 3 | Expand/Collapse all on `/photos` | PASS | Expand all 209ms (spacer 100k → 700k px, still 39 DOM rows); a 20-step scroll to the bottom took 779ms total, still only 27 DOM rows at `"id": 4997`. Collapse all 139ms → 1 row `[5000 items]`. |
+| 4 | History payload size (Network) | PASS | `GET /api/v1/history` responses: 1.9–2.9 KB at 15 entries, **9.8 KB** for a full 50-item page, 1.9 KB for the 10-item second page (vs 26 MB before). Detail `GET /history/:id` 1.7 KB. |
+| 5 | Cursor pagination | PASS | 50 items + "Load more" → click → 60 items, button hidden (`nextCursor: null`). Page-1/page-2 `_id` overlap: 0; all 60 newest-first; list items carry only `_id, method, url, status, responseTime, responseSize, createdAt`. After a new Send, the list resets to page one (50 + Load more), as designed. |
+| 6 | History click reloads request | PASS | Scribbled the URL bar, clicked a `POST /photos` entry (including one from page 2) → `GET /history/:id` fired, URL bar and method restored to `POST https://jsonplaceholder.typicode.com/photos`. |
+
+Console: zero errors or warnings across both runs. Observation (not a bug): page one of history is fetched twice on mount in dev. That's `<StrictMode>` double-invoking effects in `main.jsx`, and it doesn't happen in production builds.
+
+**Status:** Awaiting approval — every acceptance item verified in a real browser, and none needed a code change.
