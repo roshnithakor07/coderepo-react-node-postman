@@ -69,6 +69,39 @@ const TABS = ["Pretty", "Raw", "Headers"];
 export function ResponseViewer({ response, sending, request, activeEnvironmentId, onGenerateSnippet, onClear }) {
 	const [activeTab, setActiveTab] = useState("Pretty");
 	const [showSnippet, setShowSnippet] = useState(false);
+	const [searchOpen, setSearchOpen] = useState(false);
+	const [searchQuery, setSearchQuery] = useState("");
+	const [currentMatch, setCurrentMatch] = useState(0);
+	const [matchTotal, setMatchTotal] = useState(0);
+	const containerRef = useRef(null);
+	const searchInputRef = useRef(null);
+
+	// Wraps every occurrence of the current search query inside `text`,
+	// case-insensitively, in a <mark>. Shared across the Raw tab's flat text
+	// and every leaf JsonView renders. This is intentionally a *pure*
+	// function of (text, searchQuery) — it does not count or number matches
+	// itself. Counting/numbering instead reads the already-committed DOM in
+	// an effect below: React 18 StrictMode double-invokes render functions
+	// (including JsonView's, independently of this component's own render),
+	// so a shared counter mutated as a side effect of rendering would double
+	// itself on every leaf without that ever showing up in the actual DOM —
+	// querying the committed marks after the fact sidesteps that entirely.
+	const highlightText = useCallback((text) => {
+		if (!searchQuery) return text;
+		const lower = text.toLowerCase();
+		const q = searchQuery.toLowerCase();
+		if (!lower.includes(q)) return text;
+		const parts = [];
+		let i = 0;
+		while (i < text.length) {
+			const idx = lower.indexOf(q, i);
+			if (idx === -1) { parts.push(text.slice(i)); break; }
+			if (idx > i) parts.push(text.slice(i, idx));
+			parts.push(<mark key={idx} className="search-match">{text.slice(idx, idx + searchQuery.length)}</mark>);
+			i = idx + searchQuery.length;
+		}
+		return parts;
+	}, [searchQuery]);
 
 	const statusCls = response ? statusClass(response.status) : "serr";
 	const prettyBody = useCallback(() => (response?.body ? tryFormatJson(response.body) : ""), [response?.body]);
@@ -81,6 +114,59 @@ export function ResponseViewer({ response, sending, request, activeEnvironmentId
 		const value = JSON.parse(response.body);
 		return value !== null && typeof value === "object" ? value : undefined;
 	}, [response?.body]);
+
+	// Counts matches from the already-committed DOM rather than during
+	// render (see highlightText's comment above for why) — runs after every
+	// commit that could have changed which matches exist, and resets to the
+	// first match rather than trying to preserve a position that may no
+	// longer exist.
+	useEffect(() => {
+		const marks = containerRef.current?.querySelectorAll("mark.search-match") ?? [];
+		setMatchTotal(marks.length);
+		setCurrentMatch(0);
+	}, [searchQuery, activeTab, response]);
+
+	// Applies the "current match" style and scrolls it into view. Depends on
+	// the same triggers as the effect above, not just currentMatch — the set
+	// of DOM marks can change completely while currentMatch numerically
+	// stays at 0 (e.g. typing a new query).
+	useEffect(() => {
+		const marks = containerRef.current?.querySelectorAll("mark.search-match") ?? [];
+		marks.forEach((el, i) => el.classList.toggle("search-match-current", i === currentMatch));
+		if (searchOpen) marks[currentMatch]?.scrollIntoView({ block: "center" });
+	}, [currentMatch, searchOpen, searchQuery, activeTab, response]);
+
+	const closeSearch = useCallback(() => { setSearchOpen(false); setSearchQuery(""); }, []);
+	const toggleSearch = useCallback(() => {
+		if (searchOpen) { closeSearch(); return; }
+		setSearchOpen(true);
+		requestAnimationFrame(() => searchInputRef.current?.focus());
+	}, [searchOpen, closeSearch]);
+	const goToMatch = useCallback((delta) => {
+		setCurrentMatch(m => matchTotal === 0 ? 0 : (m + delta + matchTotal) % matchTotal);
+	}, [matchTotal]);
+
+	// Ctrl/Cmd+F opens the in-response search instead of the browser's own
+	// find bar — but only when there's a response to search and the user
+	// isn't currently typing in some other field (Params/Headers/Body/URL),
+	// so that native find still works everywhere else in the app.
+	useEffect(() => {
+		function handler(e) {
+			if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
+				const active = document.activeElement;
+				const typingElsewhere = active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA") && !containerRef.current?.contains(active);
+				if (typingElsewhere || !response || response.error) return;
+				e.preventDefault();
+				setSearchOpen(true);
+				requestAnimationFrame(() => searchInputRef.current?.focus());
+			} else if (e.key === "Escape" && searchOpen && document.activeElement !== document.body) {
+				const withinContainer = containerRef.current?.contains(document.activeElement);
+				if (withinContainer) closeSearch();
+			}
+		}
+		document.addEventListener("keydown", handler);
+		return () => document.removeEventListener("keydown", handler);
+	}, [response, searchOpen, closeSearch]);
 
 	const SnippetToggle = (
 		<button
@@ -120,7 +206,7 @@ export function ResponseViewer({ response, sending, request, activeEnvironmentId
 	);
 
 	return (
-		<div className="response-viewer">
+		<div className="response-viewer" ref={containerRef}>
 			<div className="response-bar">
 				<span className="response-bar-title">Response</span>
 				{response.error
@@ -140,6 +226,15 @@ export function ResponseViewer({ response, sending, request, activeEnvironmentId
 					)}
 				</div>
 				<div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
+					{!response.error && (
+						<button
+							className={`icon-btn ${searchOpen ? "active" : ""}`}
+							onClick={toggleSearch}
+							title="Search response (Ctrl+F)"
+						>
+							🔍
+						</button>
+					)}
 					<button
 						className="icon-btn"
 						onClick={onClear}
@@ -173,13 +268,33 @@ export function ResponseViewer({ response, sending, request, activeEnvironmentId
 											</button>
 										))}
 									</div>
+									{searchOpen && activeTab !== "Headers" && (
+										<div className="response-search-bar">
+											<span className="response-search-icon">🔍</span>
+											<input
+												ref={searchInputRef}
+												className="response-search-input"
+												value={searchQuery}
+												onChange={e => setSearchQuery(e.target.value)}
+												onKeyDown={e => {
+													if (e.key === "Enter") { e.preventDefault(); goToMatch(e.shiftKey ? -1 : 1); }
+													else if (e.key === "Escape") { e.preventDefault(); closeSearch(); }
+												}}
+												placeholder="Search this response…"
+											/>
+											<span className="response-search-count">{matchTotal > 0 ? `${currentMatch + 1} of ${matchTotal}` : searchQuery ? "0 results" : ""}</span>
+											<button className="response-search-nav" onClick={() => goToMatch(-1)} disabled={matchTotal === 0} aria-label="Previous match" title="Previous match (Shift+Enter)">↑</button>
+											<button className="response-search-nav" onClick={() => goToMatch(1)} disabled={matchTotal === 0} aria-label="Next match" title="Next match (Enter)">↓</button>
+											<button className="response-search-nav" onClick={closeSearch} aria-label="Close search" title="Close (Esc)">✕</button>
+										</div>
+									)}
 									<div className="response-body-wrap" role="tabpanel">
 										{activeTab === "Pretty"  && (
 											parsedJson !== undefined
-												? <div className="response-body response-body-json"><JsonView value={parsedJson} /></div>
-												: <pre className="response-body">{prettyBody() || <span style={{ color: "var(--text-tertiary)" }}>Empty response body</span>}</pre>
+												? <div className="response-body response-body-json"><JsonView value={parsedJson} highlight={highlightText} forceExpanded={searchOpen && !!searchQuery} /></div>
+												: <pre className="response-body">{highlightText(prettyBody()) || <span style={{ color: "var(--text-tertiary)" }}>Empty response body</span>}</pre>
 										)}
-										{activeTab === "Raw"     && <pre className="response-body">{response.body || <span style={{ color: "var(--text-tertiary)" }}>Empty response body</span>}</pre>}
+										{activeTab === "Raw"     && <pre className="response-body">{(response.body && highlightText(response.body)) || <span style={{ color: "var(--text-tertiary)" }}>Empty response body</span>}</pre>}
 										{activeTab === "Headers" && (
 											<table className="headers-table">
 												<thead><tr><th>Header</th><th>Value</th></tr></thead>

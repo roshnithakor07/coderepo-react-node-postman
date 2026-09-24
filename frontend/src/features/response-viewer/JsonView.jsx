@@ -24,7 +24,7 @@ function JsonPrimitive({ value, highlight }) {
 	);
 }
 
-function JsonNode({ value, path, collapsed, onToggle, highlight }) {
+function JsonNode({ value, path, collapsed, onToggle, highlight, forceExpanded }) {
 	if (value === null || typeof value !== "object") {
 		return <JsonPrimitive value={value} highlight={highlight} />;
 	}
@@ -38,7 +38,11 @@ function JsonNode({ value, path, collapsed, onToggle, highlight }) {
 		return <span className="json-punct">{open}{close}</span>;
 	}
 
-	const isCollapsed = collapsed.has(path);
+	// While a search is active, every node renders expanded regardless of
+	// its own collapsed state, so a match inside a collapsed branch is still
+	// findable — the user's actual collapse choices are preserved underneath
+	// and reappear once the search is cleared.
+	const isCollapsed = !forceExpanded && collapsed.has(path);
 	const countLabel = isArray ? `${entries.length} item${entries.length === 1 ? "" : "s"}` : `${entries.length} key${entries.length === 1 ? "" : "s"}`;
 
 	return (
@@ -63,7 +67,7 @@ function JsonNode({ value, path, collapsed, onToggle, highlight }) {
 										<span className="json-punct">: </span>
 									</>
 								)}
-								<JsonNode value={val} path={`${path}.${key}`} collapsed={collapsed} onToggle={onToggle} highlight={highlight} />
+								<JsonNode value={val} path={`${path}.${key}`} collapsed={collapsed} onToggle={onToggle} highlight={highlight} forceExpanded={forceExpanded} />
 								{i < entries.length - 1 && <span className="json-punct">,</span>}
 							</div>
 						))}
@@ -79,7 +83,7 @@ function JsonNode({ value, path, collapsed, onToggle, highlight }) {
 // feature) wrap matched substrings without JsonView needing to know
 // anything about search — every leaf's raw text is piped through it.
 // Defaults to a no-op so JSON display works with zero search wiring.
-export function JsonView({ value, highlight = identity }) {
+export function JsonView({ value, highlight = identity, forceExpanded = false }) {
 	const [collapsed, setCollapsed] = useState(() => new Set());
 	const onToggle = useCallback((path) => {
 		setCollapsed(prev => {
@@ -91,7 +95,7 @@ export function JsonView({ value, highlight = identity }) {
 
 	return (
 		<div className="json-view">
-			<JsonNode value={value} path="$" collapsed={collapsed} onToggle={onToggle} highlight={highlight} />
+			<JsonNode value={value} path="$" collapsed={collapsed} onToggle={onToggle} highlight={highlight} forceExpanded={forceExpanded} />
 		</div>
 	);
 }

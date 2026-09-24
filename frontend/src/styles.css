@@ -370,6 +370,20 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px
 .response-empty-icon { font-size: 32px; opacity: 0.3; }
 .response-empty p { font-size: 13px; color: var(--text-tertiary); }
 .response-empty small { font-size: 11px; color: var(--text-tertiary); opacity: 0.6; }
+
+/* ─── In-response search (Ctrl+F) ─── */
+.response-search-bar { display: flex; align-items: center; gap: 8px; padding: 6px 14px; flex-shrink: 0; border-bottom: 1px solid var(--border-default); background: var(--bg-overlay); }
+.response-search-icon { font-size: 11px; opacity: 0.6; flex-shrink: 0; }
+.response-search-input { flex: 1; height: 26px; padding: 0 8px; border: 1px solid var(--border-default); border-radius: var(--radius-sm); background: var(--bg-input); color: var(--text-primary); font-family: var(--font-mono); font-size: 12px; }
+.response-search-input:focus { outline: none; border-color: var(--focus-border); box-shadow: 0 0 0 2px var(--focus-ring); }
+.response-search-count { font-size: 11px; color: var(--text-tertiary); font-family: var(--font-mono); white-space: nowrap; min-width: 62px; text-align: right; }
+.response-search-nav { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: var(--radius-sm); color: var(--text-secondary); font-size: 12px; transition: all var(--t-fast); flex-shrink: 0; }
+.response-search-nav:hover:not(:disabled) { background: var(--bg-hover); color: var(--text-primary); }
+.response-search-nav:focus-visible { outline: 2px solid var(--focus-border); outline-offset: 1px; }
+.response-search-nav:disabled { color: var(--text-tertiary); opacity: 0.4; cursor: default; }
+mark.search-match { background: var(--warning-bg); color: var(--text-primary); border-radius: 2px; }
+mark.search-match-current { background: var(--warning); color: var(--bg-base); }
+
 /* Always show scrollbar so user knows response is scrollable */
 .response-body-wrap { flex: 1; overflow-y: scroll; overflow-x: auto; scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) rgba(255,255,255,0.04); }
 .response-body { padding: 14px; font-family: var(--font-mono); font-size: 12px; line-height: 1.8; color: var(--text-primary); white-space: pre-wrap; word-break: break-all; }
