@@ -3507,3 +3507,33 @@ branch=main
 repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
 worktree=main
 parent_agent=none
+
+## 2026-09-24T13:01:33+00:00 — feature/response-viewer-polish — Response Viewer polish
+
+**Task:** JSON syntax highlighting using existing color tokens, collapsible objects/arrays, Ctrl+F search within response with match count, and Save response as .json file.
+
+**Files changed:**
+- `frontend/src/features/response-viewer/JsonView.jsx` (new) — self-written recursive JSON tree: syntax highlighting + collapsible objects/arrays, accepts an optional `highlight(text)` render-prop and a `forceExpanded` override.
+- `frontend/src/features/response-viewer/ResponseViewer.jsx` — wires `JsonView` into the Pretty tab (falls back to the original flat `<pre>` for non-JSON bodies via the existing `isJson()` helper); adds Ctrl+F-triggered in-response search (match count, prev/next, Escape/close) and a "save response as .json" download button.
+- `frontend/src/styles.css` — new rules for `.json-*` (tree/highlighting), `.response-search-*` (search bar), `mark.search-match`/`.search-match-current`, and `.icon-btn:disabled` (was previously undefined). No new hex values — every color reuses an existing `:root` token.
+
+**Why (key decisions):**
+- JSON key/string/number/boolean/null colors map onto existing tokens (`--info`/`--success`/`--warning`/`--patch`/`--text-tertiary`) rather than new ones — see `transcripts/02-design-decisions.md` for the exact mapping and reasoning.
+- Search counts matches by reading the committed DOM (`querySelectorAll("mark.search-match")`) in a `useEffect`, not by mutating a ref during render — the first version double-counted under React 18 StrictMode's intentional double-invoke of render functions (12 reported vs. 6 actually shown). Documented in the design-decisions log as a real bug found and fixed during this task, not a hypothetical.
+- Search force-expands collapsed JSON nodes while active (`forceExpanded` prop) so a match inside a collapsed branch is still findable; the user's own collapse choices are restored once the search bar closes.
+- No dependency was added — both the JSON tree and the search/highlight logic are hand-written, per the ground rules.
+
+**How to test:**
+1. Log in (`alex.rivera@postman.dev` / `password123`), send a request against the local sandbox that returns JSON, e.g. `POST http://localhost:8000/api/v1/sandbox/post` with a JSON body containing a string, a number, a boolean, and `null`.
+2. On the Pretty tab, confirm each value type is a different color and punctuation is muted.
+3. Click the caret/count on an object or array to collapse it to `{…N keys}` / `[…N items]`; click again to re-expand.
+4. Press Ctrl+F (or click the 🔍 icon in the response bar) — a search bar appears, focused. Type a term that exists inside a currently-collapsed node; confirm it's still found and the node auto-expands while searching.
+5. Press Enter/Shift+Enter to move next/prev; confirm the "X of Y" count and the highlighted-current match are correct. Press Escape or ✕ to close — confirm the node you collapsed in step 3 is collapsed again.
+6. Click the ⭳ (save) icon; confirm a `.json` file downloads containing the response body. Trigger an error response (e.g. an unreachable host) and confirm both the search and save icons disappear.
+7. Regression: Raw and Headers tabs still render correctly; Clear Response still works; Snippets panel still works; Save-to-collection modal, Collections tab, History tab, and the Environments modal all still open/work; sidebar default width is still 290px.
+
+**Known issues / follow-ups:**
+- Search is scoped to the Pretty and Raw tabs only; the Headers tab (a table, not text) is intentionally not searched — flagged as a scoping choice, not an oversight.
+- No lint script exists in this project (confirmed via `package.json`); "lint clean" was satisfied by `bun run build`'s own compile step plus manual review, since there's nothing to run.
+
+**Status:** Awaiting approval.
