@@ -4,12 +4,13 @@
 // render (see transcripts/02-design-decisions.md — that was a real bug
 // under React 18 StrictMode in the first version of this feature).
 //
-// EXPAND_CAP bounds how many distinct matches get auto-revealed. Without it,
-// a broad query against a huge response (e.g. a single common letter against
-// 5000 rows) would force nearly everything open and reproduce the exact
-// freeze this module exists to avoid. The reported total count is always
-// exact; only how many of those matches get auto-revealed is capped.
-const EXPAND_CAP = 300;
+// Returns matches as an ordered list of {path, ancestorPaths}, not as a set
+// of "paths to force-expand." An earlier version expanded every matching
+// path's ancestors at once (then, when that still proved too broad, capped
+// how many); with virtualization there's a simpler and genuinely unbounded
+// answer — only the *current* match needs its ancestors expanded, one at a
+// time, exactly when the user navigates to it. See ResponseViewer.jsx's
+// jump-to-match effect.
 
 function valueMatches(value, query) {
 	if (value === null) return "null".includes(query);
@@ -18,62 +19,32 @@ function valueMatches(value, query) {
 	return String(value).toLowerCase().includes(query);
 }
 
-// Returns { count, expandPaths: Set<string>, matchedIndices: Map<arrayPath, Set<number>> }.
-//
-// matchedIndices deliberately records *which specific indices* matched
-// inside each array, not "how far in the array the furthest match sits."
-// An earlier version tracked the latter (a single "visible up to index N"
-// number) — correct, but a match at index 4991 of a 5000-item array meant
-// rendering practically the whole array just to reach it, which reproduced
-// the original freeze under a query broad enough to have late matches. This
-// module knows nothing about chunk windows or what's currently rendered —
-// JsonView is the one that unions these specific indices with whatever
-// contiguous window it's already showing.
+// Returns { count, matches: [{ path, ancestorPaths }] }, in document order
+// (the same pre-order a flatten() walk visits, so "next match" reads top to
+// bottom the way the user would scroll).
 export function findJsonMatches(root, rawQuery) {
 	const query = rawQuery.trim().toLowerCase();
-	if (!query) return { count: 0, expandPaths: new Set(), matchedIndices: new Map() };
+	if (!query) return { count: 0, matches: [] };
 
-	let count = 0;
-	const expandPaths = new Set();
-	const matchedIndices = new Map();
-	let revealed = 0;
+	const matches = [];
 
-	function reveal(ancestors) {
-		if (revealed >= EXPAND_CAP) return;
-		revealed++;
-		for (const { path, arrayIndex, arrayPath } of ancestors) {
-			expandPaths.add(path);
-			if (arrayIndex != null) {
-				if (!matchedIndices.has(arrayPath)) matchedIndices.set(arrayPath, new Set());
-				matchedIndices.get(arrayPath).add(arrayIndex);
-			}
-		}
-	}
-
-	function walk(value, path, ancestors) {
+	function walk(value, path, ancestorPaths) {
 		if (value !== null && typeof value === "object") {
 			const isArray = Array.isArray(value);
 			const entries = isArray ? value.map((v, i) => [String(i), v]) : Object.entries(value);
-			for (let i = 0; i < entries.length; i++) {
-				const [key, val] = entries[i];
+			const nextAncestors = [...ancestorPaths, path];
+			for (const [key, val] of entries) {
 				const childPath = `${path}.${key}`;
-				const nextAncestors = [...ancestors, { path, arrayIndex: isArray ? i : null, arrayPath: isArray ? path : null }];
-				if (!isArray && query && key.toLowerCase().includes(query)) {
-					count++;
-					reveal(nextAncestors);
-				}
+				if (!isArray && key.toLowerCase().includes(query)) matches.push({ path: childPath, ancestorPaths: nextAncestors });
 				walk(val, childPath, nextAncestors);
 			}
 			return;
 		}
-		if (valueMatches(value, query)) {
-			count++;
-			reveal(ancestors);
-		}
+		if (valueMatches(value, query)) matches.push({ path, ancestorPaths });
 	}
 
 	walk(root, "$", []);
-	return { count, expandPaths, matchedIndices };
+	return { count: matches.length, matches };
 }
 
 // Same query semantics, applied to flat text (the Raw tab, or a non-JSON

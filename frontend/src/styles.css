@@ -396,18 +396,26 @@ mark.search-match-current { background: var(--warning); color: var(--bg-base); }
 .response-error { padding: 16px; color: var(--danger); font-size: 13px; line-height: 1.6; display: flex; flex-direction: column; gap: 6px; }
 .response-error strong { font-size: 14px; font-weight: 700; }
 
-/* ─── JSON tree view (Pretty tab) ─── */
+/* ─── JSON tree view (Pretty tab) — virtualized: only rows in the current
+   scroll viewport (+ overscan) are ever real DOM elements, regardless of
+   how many are logically expanded. ROW_HEIGHT in JsonView.jsx must match
+   .json-vrow's height/line-height exactly. ─── */
 .response-body-json { white-space: normal; word-break: normal; }
-.json-view { display: inline; }
-.json-children { padding-left: 18px; border-left: 1px solid var(--border-subtle); margin-left: 3px; }
-.json-row { white-space: pre-wrap; word-break: break-word; }
+.json-toolbar { display: flex; align-items: center; gap: 12px; padding: 6px 14px; flex-shrink: 0; border-bottom: 1px solid var(--border-default); background: var(--bg-overlay); }
+.json-toolbar-btn { font-size: 11px; font-weight: 600; color: var(--text-secondary); padding: 2px 8px; border-radius: var(--radius-sm); transition: all var(--t-fast); }
+.json-toolbar-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.json-toolbar-btn:focus-visible { outline: 2px solid var(--focus-border); outline-offset: 1px; }
+.json-view { position: relative; font-family: var(--font-mono); font-size: 12px; }
+.json-view-window { position: absolute; top: 0; left: 0; right: 0; }
+.json-vrow { height: 20px; line-height: 20px; padding-right: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.json-vrow-gutter { display: inline-block; width: 14px; flex-shrink: 0; }
 .json-punct { color: var(--text-secondary); }
 .json-key { color: var(--info); }
 .json-string { color: var(--success); }
 .json-number { color: var(--warning); }
 .json-bool { color: var(--patch); }
 .json-null { color: var(--text-tertiary); }
-.json-toggle { display: inline-grid; place-items: center; width: 14px; height: 14px; vertical-align: middle; margin-right: 2px; border-radius: 3px; color: var(--text-tertiary); transition: all var(--t-fast); }
+.json-toggle { display: inline-grid; place-items: center; width: 14px; height: 14px; vertical-align: middle; border-radius: 3px; color: var(--text-tertiary); transition: all var(--t-fast); }
 .json-toggle:hover { background: var(--bg-hover); color: var(--text-primary); }
 .json-toggle:focus-visible { outline: 2px solid var(--focus-border); outline-offset: 1px; }
 .json-caret { display: inline-block; font-size: 8px; transition: transform var(--t-fast) var(--ease); }
@@ -415,11 +423,6 @@ mark.search-match-current { background: var(--warning); color: var(--bg-base); }
 .json-collapsed-summary { color: var(--text-tertiary); font-family: var(--font-mono); font-size: 11px; font-style: italic; padding: 0 3px; border-radius: 3px; transition: all var(--t-fast); }
 .json-collapsed-summary:hover { background: var(--bg-hover); color: var(--text-secondary); }
 .json-collapsed-summary:focus-visible { outline: 2px solid var(--focus-border); outline-offset: 1px; }
-.json-show-more-row { display: flex; gap: 10px; padding: 2px 0; }
-.json-gap { color: var(--text-tertiary); font-size: 11px; font-style: italic; padding: 2px 0; }
-.json-show-more { color: var(--info); font-family: var(--font-mono); font-size: 11px; padding: 0 3px; border-radius: 3px; transition: all var(--t-fast); }
-.json-show-more:hover { background: var(--bg-hover); text-decoration: underline; }
-.json-show-more:focus-visible { outline: 2px solid var(--focus-border); outline-offset: 1px; }
 
 /* ─── Headers table ─── */
 .headers-table { width: 100%; border-collapse: collapse; }

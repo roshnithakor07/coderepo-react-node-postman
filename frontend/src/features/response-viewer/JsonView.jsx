@@ -1,189 +1,187 @@
-import { useState, useCallback } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { flattenTree } from "./jsonTree.js";
 
-// Self-written JSON tree renderer: syntax highlighting + collapsible
-// objects/arrays. No dependency — this is small enough (and specific
-// enough to this app's own token-driven color scheme) that pulling in a
-// library would cost more than it saves.
+// Self-written, virtualized JSON tree renderer: syntax highlighting +
+// collapsible objects/arrays + windowed rendering. No dependency (no
+// react-window) — a fixed-row-height virtual list is a well-understood,
+// small technique, and this app's rows are already fixed-height text lines,
+// which is exactly the case hand-rolling suits.
 //
 // Color mapping reuses existing design tokens rather than inventing new
 // ones (see transcripts/02-design-decisions.md for the exact mapping and
-// why): keys use --info (the same blue already used for header-table
-// keys), strings --success, numbers --warning, booleans --patch, null
-// --text-tertiary, punctuation --text-secondary.
+// why): keys use --info, strings --success, numbers --warning, booleans
+// --patch, null --text-tertiary, punctuation --text-secondary.
 //
-// Performance model (see transcripts/02-design-decisions.md for the
-// measured freeze this replaced): a collapsed node's children are never
-// rendered at all — not hidden with CSS, simply absent from the returned
-// tree — so cost scales with what's actually visible, not with total
-// response size. Two things keep a huge response from all being "visible"
-// by default: DEFAULT_COLLAPSE_DEPTH (only the first couple of levels
-// auto-expand) and MAX_ENTRIES_AUTO_EXPANDED (a container with more entries
-// than this starts collapsed regardless of depth). A large array that *is*
-// expanded still only renders a CHUNK_SIZE-item window at a time, grown by
-// a "Show N more" control, rather than every item at once.
-
+// Performance model: jsonTree.js's flattenTree() only recurses into
+// EXPANDED containers — a collapsed subtree contributes exactly one row,
+// never its children — so flattening cost scales with what's expanded, not
+// total response size. On top of that, this component only ever mounts the
+// rows inside the current scroll viewport (+ a small overscan), regardless
+// of how large `expandedPaths` makes the flattened list — that's what makes
+// "Expand all" on a 5000-item array safe: flattening ~30,000 rows is a
+// cheap plain-JS walk (no DOM), and only ~40 of them are ever real elements
+// at once. ROW_HEIGHT must stay in sync with .json-vrow's CSS height/
+// line-height — the virtualization math assumes every row is exactly this
+// tall.
 const identity = (text) => text;
-const DEFAULT_COLLAPSE_DEPTH = 2; // depths 0 and 1 auto-expand; depth >= 2 auto-collapses
-const MAX_ENTRIES_AUTO_EXPANDED = 100;
-const CHUNK_SIZE = 100;
+export const ROW_HEIGHT = 20;
+const OVERSCAN = 12;
+const INDENT_PX = 14;
 
-function defaultCollapsed(depth, entryCount) {
-	return depth >= DEFAULT_COLLAPSE_DEPTH || entryCount > MAX_ENTRIES_AUTO_EXPANDED;
+function JsonPrimitive({ value, highlight, path }) {
+	if (value === null) return <span className="json-null">{highlight("null", path)}</span>;
+	if (typeof value === "boolean") return <span className="json-bool">{highlight(String(value), path)}</span>;
+	if (typeof value === "number") return <span className="json-number">{highlight(String(value), path)}</span>;
+	return <span className="json-string">"{highlight(String(value), path)}"</span>;
 }
 
-const EMPTY_SET = new Set();
-const EMPTY_MAP = new Map();
-function rangeArray(n) {
-	return Array.from({ length: n }, (_, i) => i);
-}
-
-function JsonPrimitive({ value, highlight }) {
-	if (value === null) return <span className="json-null">{highlight("null")}</span>;
-	if (typeof value === "boolean") return <span className="json-bool">{highlight(String(value))}</span>;
-	if (typeof value === "number") return <span className="json-number">{highlight(String(value))}</span>;
+function RowGutter({ row, onToggle }) {
+	if (row.type !== "open" && row.type !== "collapsed") return <span className="json-vrow-gutter" />;
 	return (
-		<span className="json-string">
-			"{highlight(String(value))}"
+		<span className="json-vrow-gutter">
+			<button
+				type="button"
+				className="json-toggle"
+				onClick={() => onToggle(row.path)}
+				aria-label={row.type === "collapsed" ? "Expand" : "Collapse"}
+				aria-expanded={row.type === "open"}
+			>
+				<span className={`json-caret ${row.type === "open" ? "open" : ""}`}>▶</span>
+			</button>
 		</span>
 	);
 }
 
-function JsonNode({ value, path, depth, toggled, onToggle, visibleCounts, onShowMore, highlight, searchExpandPaths, searchMatchedIndices }) {
-	if (value === null || typeof value !== "object") {
-		return <JsonPrimitive value={value} highlight={highlight} />;
-	}
-
-	const isArray = Array.isArray(value);
-	const entries = isArray ? value.map((v, i) => [String(i), v]) : Object.entries(value);
-	const open = isArray ? "[" : "{";
-	const close = isArray ? "]" : "}";
-
-	if (entries.length === 0) {
-		return <span className="json-punct">{open}{close}</span>;
-	}
-
-	// toggled.has(path) means "the user clicked this node," which flips it
-	// away from its computed default. A search match forces it open no
-	// matter what, without touching — and without being confused with —
-	// that toggle state, so clearing the search restores exactly what the
-	// user had.
-	const base = defaultCollapsed(depth, entries.length);
-	const userFlipped = toggled.has(path);
-	const isCollapsed = searchExpandPaths.has(path) ? false : (userFlipped ? !base : base);
-	const countLabel = isArray ? `${entries.length} item${entries.length === 1 ? "" : "s"}` : `${entries.length} key${entries.length === 1 ? "" : "s"}`;
-
-	// Which indices actually render, for an array: the normal contiguous
-	// chunk window, UNION any specific indices a search matched elsewhere in
-	// the array. Deliberately *not* "extend the window up to the furthest
-	// match" — a match at index 4991 of 5000 would otherwise force nearly
-	// the whole array to render just to reach it, reproducing the freeze
-	// this chunking exists to prevent. Objects aren't chunked (their entry
-	// count is what makes them auto-collapse at >100 instead).
-	const windowSize = isArray ? (visibleCounts.get(path) ?? Math.min(CHUNK_SIZE, entries.length)) : entries.length;
-	const matchedIdx = isArray ? (searchMatchedIndices.get(path) ?? EMPTY_SET) : EMPTY_SET;
-	const shownIndices = isArray
-		? (matchedIdx.size === 0
-			? rangeArray(Math.min(windowSize, entries.length))
-			: rangeArray(Math.min(windowSize, entries.length)).concat([...matchedIdx].filter(i => i >= windowSize).sort((a, b) => a - b)))
-		: rangeArray(entries.length);
-	const remaining = entries.length - shownIndices.length;
-
+function RowKeyPrefix({ row, highlight }) {
+	if (row.key === null) return null;
 	return (
-		<span className="json-node">
-			<button type="button" className="json-toggle" onClick={() => onToggle(path)} aria-label={isCollapsed ? "Expand" : "Collapse"} aria-expanded={!isCollapsed}>
-				<span className={`json-caret ${isCollapsed ? "" : "open"}`}>▶</span>
-			</button>
-			<span className="json-punct">{open}</span>
-			{isCollapsed ? (
-				<>
-					<button type="button" className="json-collapsed-summary" onClick={() => onToggle(path)}>{countLabel}</button>
-					<span className="json-punct">{close}</span>
-				</>
-			) : (
-				<>
-					<div className="json-children">
-						{shownIndices.map((idx, i) => {
-							const [key, val] = entries[idx];
-							const isGapBefore = i > 0 && idx !== shownIndices[i - 1] + 1;
-							return (
-								<div className="json-row" key={key}>
-									{isGapBefore && <div className="json-gap">⋯ {idx - shownIndices[i - 1] - 1} items skipped (matched below)</div>}
-									{!isArray && (
-										<>
-											<span className="json-key">"{highlight(key)}"</span>
-											<span className="json-punct">: </span>
-										</>
-									)}
-									<JsonNode
-										value={val}
-										path={`${path}.${key}`}
-										depth={depth + 1}
-										toggled={toggled}
-										onToggle={onToggle}
-										visibleCounts={visibleCounts}
-										onShowMore={onShowMore}
-										highlight={highlight}
-										searchExpandPaths={searchExpandPaths}
-										searchMatchedIndices={searchMatchedIndices}
-									/>
-									{(i < shownIndices.length - 1 || remaining > 0) && <span className="json-punct">,</span>}
-								</div>
-							);
-						})}
-						{remaining > 0 && (
-							<div className="json-row json-show-more-row">
-								<button type="button" className="json-show-more" onClick={() => onShowMore(path, Math.min(windowSize + CHUNK_SIZE, entries.length))}>
-									Show {Math.min(CHUNK_SIZE, entries.length - windowSize)} more
-								</button>
-								{entries.length - windowSize > CHUNK_SIZE && (
-									<button type="button" className="json-show-more" onClick={() => onShowMore(path, entries.length)}>
-										Show all ({entries.length})
-									</button>
-								)}
-							</div>
-						)}
-					</div>
-					<span className="json-punct">{close}</span>
-				</>
-			)}
-		</span>
+		<>
+			<span className="json-key">"{highlight(row.key, row.path)}"</span>
+			<span className="json-punct">: </span>
+		</>
+	);
+}
+
+function JsonRow({ row, highlight, onToggle }) {
+	const style = { paddingLeft: row.depth * INDENT_PX };
+	if (row.type === "open") {
+		return (
+			<div className="json-vrow" style={style}>
+				<RowGutter row={row} onToggle={onToggle} />
+				<RowKeyPrefix row={row} highlight={highlight} />
+				<span className="json-punct">{row.isArray ? "[" : "{"}</span>
+			</div>
+		);
+	}
+	if (row.type === "close") {
+		return (
+			<div className="json-vrow" style={style}>
+				<span className="json-vrow-gutter" />
+				<span className="json-punct">{row.isArray ? "]" : "}"}{row.needsComma ? "," : ""}</span>
+			</div>
+		);
+	}
+	if (row.type === "empty") {
+		return (
+			<div className="json-vrow" style={style}>
+				<span className="json-vrow-gutter" />
+				<RowKeyPrefix row={row} highlight={highlight} />
+				<span className="json-punct">{row.isArray ? "[]" : "{}"}{row.needsComma ? "," : ""}</span>
+			</div>
+		);
+	}
+	if (row.type === "collapsed") {
+		const countLabel = row.isArray ? `${row.entryCount} item${row.entryCount === 1 ? "" : "s"}` : `${row.entryCount} key${row.entryCount === 1 ? "" : "s"}`;
+		return (
+			<div className="json-vrow" style={style}>
+				<RowGutter row={row} onToggle={onToggle} />
+				<RowKeyPrefix row={row} highlight={highlight} />
+				<span className="json-punct">{row.isArray ? "[" : "{"}</span>
+				<button type="button" className="json-collapsed-summary" onClick={() => onToggle(row.path)}>{countLabel}</button>
+				<span className="json-punct">{row.isArray ? "]" : "}"}{row.needsComma ? "," : ""}</span>
+			</div>
+		);
+	}
+	// leaf — title carries the untruncated value; long ones ellipsize per the CSS.
+	return (
+		<div className="json-vrow" style={style} title={String(row.value)}>
+			<span className="json-vrow-gutter" />
+			<RowKeyPrefix row={row} highlight={highlight} />
+			<JsonPrimitive value={row.value} highlight={highlight} path={row.path} />
+			{row.needsComma && <span className="json-punct">,</span>}
+		</div>
 	);
 }
 
 // `highlight(text) => ReactNode` lets a caller (the in-response search
 // feature) wrap matched substrings without JsonView needing to know
-// anything about search — every leaf's raw text is piped through it.
-// `searchExpandPaths`/`searchMatchedIndices` (both optional) come from
-// jsonSearch.js's pure, memoized match-finder — JsonView never computes
-// matches itself, it only respects where the caller says a match is.
-export function JsonView({ value, highlight = identity, searchExpandPaths, searchMatchedIndices }) {
-	const [toggled, setToggled] = useState(() => new Set());
-	const [visibleCounts, setVisibleCounts] = useState(() => new Map());
-	const onToggle = useCallback((path) => {
-		setToggled(prev => {
-			const next = new Set(prev);
-			next.has(path) ? next.delete(path) : next.add(path);
-			return next;
+// anything about search. `expandedPaths`/`onToggle` are controlled from
+// ResponseViewer (not owned locally) because search "jump to match" and the
+// Expand-all/Collapse-all controls both need to drive expansion from
+// outside the tree. `scrollToPath`/`scrollNonce` request scrolling a
+// specific path into view once it's expanded (scrollNonce should change on
+// every navigation — even to the same path twice — so the effect reliably
+// re-fires; ResponseViewer passes the current match index for this).
+export function JsonView({ value, expandedPaths, onToggle, highlight = identity, scrollContainerRef, scrollToPath, scrollNonce }) {
+	const flatRows = useMemo(() => flattenTree(value, expandedPaths), [value, expandedPaths]);
+	const rootRef = useRef(null);
+	const [range, setRange] = useState({ start: 0, end: 80 });
+
+	const recomputeRange = useCallback(() => {
+		const container = scrollContainerRef.current;
+		const root = rootRef.current;
+		if (!container || !root) return;
+		const relativeScroll = Math.max(0, container.scrollTop - root.offsetTop);
+		const start = Math.max(0, Math.floor(relativeScroll / ROW_HEIGHT) - OVERSCAN);
+		const visibleRowCount = Math.ceil(container.clientHeight / ROW_HEIGHT) + OVERSCAN * 2;
+		setRange(prev => {
+			const end = Math.min(flatRows.length, start + visibleRowCount);
+			return prev.start === start && prev.end === end ? prev : { start, end };
 		});
-	}, []);
-	const onShowMore = useCallback((path, count) => {
-		setVisibleCounts(prev => new Map(prev).set(path, count));
-	}, []);
+	}, [flatRows.length, scrollContainerRef]);
+
+	useEffect(() => {
+		const container = scrollContainerRef.current;
+		if (!container) return;
+		recomputeRange();
+		container.addEventListener("scroll", recomputeRange, { passive: true });
+		const ro = new ResizeObserver(recomputeRange);
+		ro.observe(container);
+		return () => { container.removeEventListener("scroll", recomputeRange); ro.disconnect(); };
+	}, [recomputeRange, scrollContainerRef]);
+
+	// flatRows changed (data, or a node was expanded/collapsed) — the old
+	// range may now be wrong (shorter list, or content shifted under an
+	// unchanged scrollTop), so re-derive it.
+	useEffect(() => { recomputeRange(); }, [flatRows, recomputeRange]);
+
+	// Scrolls a specific row into view once it exists in flatRows — the
+	// caller is expected to have already added its ancestor paths to
+	// expandedPaths; this effect only locates and scrolls, it never expands
+	// anything itself.
+	useEffect(() => {
+		if (scrollToPath == null) return;
+		const idx = flatRows.findIndex(r => r.path === scrollToPath);
+		if (idx === -1) return;
+		const container = scrollContainerRef.current;
+		const root = rootRef.current;
+		if (!container || !root) return;
+		const targetTop = root.offsetTop + idx * ROW_HEIGHT;
+		const center = targetTop - container.clientHeight / 2 + ROW_HEIGHT / 2;
+		container.scrollTo({ top: Math.max(0, center) });
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [scrollToPath, scrollNonce, flatRows, scrollContainerRef]);
+
+	const visible = flatRows.slice(range.start, range.end);
 
 	return (
-		<div className="json-view">
-			<JsonNode
-				value={value}
-				path="$"
-				depth={0}
-				toggled={toggled}
-				onToggle={onToggle}
-				visibleCounts={visibleCounts}
-				onShowMore={onShowMore}
-				highlight={highlight}
-				searchExpandPaths={searchExpandPaths ?? EMPTY_SET}
-				searchMatchedIndices={searchMatchedIndices ?? EMPTY_MAP}
-			/>
+		<div className="json-view" ref={rootRef} style={{ position: "relative", height: flatRows.length * ROW_HEIGHT }}>
+			<div className="json-view-window" style={{ transform: `translateY(${range.start * ROW_HEIGHT}px)` }}>
+				{/* An expanded container contributes both an "open" and a "close" row
+				    sharing the same path — key on path+type so React never sees a
+				    collision (it did before this fix; see transcripts/claude-session.md). */}
+				{visible.map(row => <JsonRow key={`${row.path}:${row.type}`} row={row} highlight={highlight} onToggle={onToggle} />)}
+			</div>
 		</div>
 	);
 }
