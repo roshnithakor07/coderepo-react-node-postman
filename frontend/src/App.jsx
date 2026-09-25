@@ -15,6 +15,15 @@ import { Sidebar } from "./features/workspace/Sidebar.jsx";
 import { hasSessionToken, setSessionToken } from "./shared/api/client.js";
 import { ConfirmDialog } from "./shared/components/ConfirmDialog.jsx";
 
+// Smallest the request/response panes may get while dragging the splitter:
+// enough for each pane's bar, its tab strip and the first line of content
+// (measured: request bar 59 + tabs 36 + editor toolbar/header ~60 + one
+// row 32; response bar 49 + tabs 36 + JSON toolbar 34 + ~60 of body), so a
+// tab strip is never left sitting over nothing.
+const REQUEST_PANE_MIN_PX = 200;
+const RESPONSE_PANE_MIN_PX = 180;
+const SPLITTER_PX = 10;
+
 const DEFAULT_REQUEST = {
 	method: "GET",
 	url: "",
@@ -310,7 +319,12 @@ export function PostmanWorkspace({ account, onLogout }) {
 		function onMove(me) {
 			if (!draggingRef.current || !containerRef.current) return;
 			const rect = containerRef.current.getBoundingClientRect();
-			const pct = Math.max(5, Math.min(95, ((me.clientY - rect.top) / rect.height) * 100));
+			const raw = ((me.clientY - rect.top) / rect.height) * 100;
+			const minPct = (REQUEST_PANE_MIN_PX / rect.height) * 100;
+			const maxPct = 100 - ((RESPONSE_PANE_MIN_PX + SPLITTER_PX) / rect.height) * 100;
+			// A window too short for both minimums keeps them in proportion
+			// instead of letting either pane collapse.
+			const pct = maxPct >= minPct ? Math.min(maxPct, Math.max(minPct, raw)) : (minPct / (minPct + 100 - maxPct)) * 100;
 			setSplitterY(pct);
 		}
 		function onUp() {
@@ -388,7 +402,7 @@ export function PostmanWorkspace({ account, onLogout }) {
 					</div>
 				)}
 				<div className="workspace-panes" ref={containerRef}>
-					<div className="resizable-pane" style={{ flex: `0 0 ${splitterY}%`, minHeight: "95px" }}>
+					<div className="resizable-pane" style={{ flex: `0 1 ${splitterY}%`, minHeight: `min(${REQUEST_PANE_MIN_PX}px, 45%)` }}>
 						<RequestBuilder
 							request={request}
 							onRequestChange={updateRequest}
@@ -405,7 +419,10 @@ export function PostmanWorkspace({ account, onLogout }) {
 						aria-label="Resize panels"
 						title="Drag to resize"
 					/>
-					<div className="resizable-pane" style={{ flex: `1 1 ${100 - splitterY}%`, minHeight: "56px" }}>
+					<div
+						className="resizable-pane"
+						style={{ flex: `1 1 ${100 - splitterY}%`, minHeight: `min(${RESPONSE_PANE_MIN_PX}px, 45%)` }}
+					>
 						<ResponseViewer
 							response={response}
 							sending={sending}

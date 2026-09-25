@@ -114,6 +114,57 @@ describe("error handling (live HTTP)", () => {
 	});
 });
 
+describe("saved request row descriptions (live HTTP)", () => {
+	test("param and header descriptions survive save and reload; rows without one stay without one", async () => {
+		const collection = await (
+			await authed("/collections", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ name: "Descriptions" }),
+			})
+		).json();
+		const created = await authed(`/collections/${collection.data._id}/requests`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				name: "With descriptions",
+				url: "http://localhost/api",
+				params: [
+					{ key: "page", value: "2", enabled: true, description: "1-based page number" },
+					{ key: "debug", value: "1", enabled: false },
+				],
+				headers: [{ key: "X-Trace", value: "abc", enabled: true, description: "Correlates logs" }],
+			}),
+		});
+		expect(created.status).toBe(201);
+
+		const listed = await (await authed(`/collections/${collection.data._id}/requests`)).json();
+		const saved = listed.data.find((item) => item.name === "With descriptions");
+		expect(saved.params).toEqual([
+			{ key: "page", value: "2", enabled: true, description: "1-based page number" },
+			{ key: "debug", value: "1", enabled: false },
+		]);
+		expect(saved.headers).toEqual([{ key: "X-Trace", value: "abc", enabled: true, description: "Correlates logs" }]);
+	});
+
+	test("a description over 500 characters is rejected with a validation error", async () => {
+		const collection = await (
+			await authed("/collections", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ name: "Too long" }),
+			})
+		).json();
+		const response = await authed(`/collections/${collection.data._id}/requests`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ name: "Long", params: [{ key: "a", value: "1", enabled: true, description: "x".repeat(501) }] }),
+		});
+		expect(response.status).toBe(400);
+		expect((await response.json()).error.code).toBe("VALIDATION_ERROR");
+	});
+});
+
 describe("request history URL fidelity (live HTTP)", () => {
 	test("a proxied request with query parameters is recorded in history with the full URL, and reload data matches what was sent", async () => {
 		const sandboxGetUrl = `${baseUrl}/sandbox/get`;

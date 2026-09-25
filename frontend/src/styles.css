@@ -1291,10 +1291,33 @@ textarea:focus-visible {
 	flex-direction: column;
 	gap: 4px;
 }
-.kv-header-row {
+.kv-toolbar {
+	display: flex;
+	justify-content: flex-end;
+	margin-bottom: 2px;
+}
+.kv-mode-btn {
+	height: 24px;
+	padding: 0 8px;
+	border-radius: var(--radius-sm);
+	color: var(--text-tertiary);
+	font-size: 11px;
+	font-weight: 600;
+	transition: all var(--t-fast);
+}
+.kv-mode-btn:hover {
+	color: var(--primary);
+	background: var(--primary-dim);
+}
+/* Checkbox · key · value · compact description · delete */
+.kv-header-row,
+.kv-editor .kv-row {
 	display: grid;
-	grid-template-columns: 18px 1fr 1fr 26px;
+	grid-template-columns: 18px minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.75fr) 26px;
 	gap: 6px;
+	align-items: center;
+}
+.kv-header-row {
 	padding-bottom: 6px;
 	border-bottom: 1px solid var(--border-subtle);
 	margin-bottom: 4px;
@@ -1305,12 +1328,6 @@ textarea:focus-visible {
 	letter-spacing: 0.5px;
 	text-transform: uppercase;
 	color: var(--text-tertiary);
-}
-.kv-row {
-	display: grid;
-	grid-template-columns: 18px 1fr 1fr 26px;
-	gap: 6px;
-	align-items: center;
 }
 .kv-checkbox {
 	width: 14px;
@@ -1340,6 +1357,14 @@ textarea:focus-visible {
 .kv-input:disabled {
 	opacity: 0.35;
 }
+/* Descriptions are secondary: sans-serif and a step smaller. */
+.kv-input-desc {
+	height: 28px;
+	padding: 0 8px;
+	font-family: var(--font-sans);
+	font-size: 11px;
+	color: var(--text-secondary);
+}
 .kv-del-btn {
 	width: 26px;
 	height: 26px;
@@ -1353,6 +1378,72 @@ textarea:focus-visible {
 .kv-del-btn:hover {
 	background: var(--danger-bg);
 	color: var(--danger);
+}
+/* Request tables: the delete button only shows on row hover or when anything
+   in the row has focus — it stays in the tab order, so keyboard users reach it
+   (and focusing it reveals it). Touch screens have no hover, so it stays
+   visible there. */
+.kv-editor .kv-row .kv-del-btn {
+	opacity: 0;
+}
+.kv-editor .kv-row:hover .kv-del-btn,
+.kv-editor .kv-row:focus-within .kv-del-btn {
+	opacity: 1;
+}
+@media (hover: none) {
+	.kv-editor .kv-row .kv-del-btn {
+		opacity: 1;
+	}
+}
+/* The trailing placeholder row: nothing to enable or delete yet. */
+.kv-editor .kv-row-placeholder .kv-checkbox,
+.kv-editor .kv-row-placeholder .kv-del-btn {
+	visibility: hidden;
+}
+/* Phones: key and value need the width, so the description column steps
+   aside (descriptions are kept, just not shown). */
+@media (max-width: 600px) {
+	.kv-header-row,
+	.kv-editor .kv-row {
+		grid-template-columns: 18px minmax(0, 1fr) minmax(0, 1fr) 26px;
+	}
+	.kv-header-row .kv-col-label:nth-child(4),
+	.kv-editor .kv-input-desc {
+		display: none;
+	}
+}
+.kv-bulk {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+.kv-bulk-textarea {
+	min-height: 140px;
+	padding: 10px 12px;
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--radius-sm);
+	background: var(--bg-panel);
+	color: var(--text-primary);
+	font-family: var(--font-mono);
+	font-size: 12px;
+	line-height: 1.6;
+	resize: vertical;
+	transition: border-color var(--t-fast);
+}
+.kv-bulk-textarea:focus {
+	outline: none;
+	border-color: var(--focus-border);
+}
+.kv-bulk-textarea::placeholder {
+	color: var(--text-placeholder);
+}
+.kv-bulk-hint {
+	font-size: 11px;
+	color: var(--text-tertiary);
+}
+.kv-bulk-hint code {
+	font-family: var(--font-mono);
+	color: var(--text-secondary);
 }
 .add-row-btn {
 	display: flex;
