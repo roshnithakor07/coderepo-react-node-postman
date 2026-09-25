@@ -3707,3 +3707,95 @@ A Playwright browser was available this round, so the UI click-through the previ
 Console: zero errors or warnings across both runs. Observation (not a bug): page one of history is fetched twice on mount in dev. That's `<StrictMode>` double-invoking effects in `main.jsx`, and it doesn't happen in production builds.
 
 **Status:** Awaiting approval — every acceptance item verified in a real browser, and none needed a code change.
+
+---
+
+### Update — large-response perf, round 5: measured cause, then fixes 1–4 (no chunking)
+
+**Request.** The UI freezes on large responses (`/photos`). Measure first and report the cause before fixing. A re-sent older prompt also asked for "Show 100 more / Show all" chunking. I flagged that this conflicts with the round-2 decision (chunking was what caused the Show-all and reverse-search freezes, and virtualization replaced it). The user confirmed the prompt was re-sent by mistake: keep virtualization, don't re-add chunking, go ahead with fixes 1–4. Branch check: `feature/response-viewer-polish` is not merged into `origin/main` (not an ancestor, no PR), so the work stays on this branch.
+
+**How it was measured.** The Playwright MCP server wants Google Chrome, which isn't installed, so everything ran as headless `playwright-core` scripts (scratchpad only, not committed) against the bundled Chromium. Instruments: a `longtask` PerformanceObserver; a requestAnimationFrame frame-gap probe (worst frame per phase); CDP CPU profiles (`Profiler.start/stop`, aggregated by self time); and CDP `Emulation.setCPUThrottlingRate` for the 4× runs. Production numbers come from a `vite build` served by `vite preview`, built into the scratchpad (the repo's `dist/` untouched). The phases were Send → tree, Expand all, Collapse all, a 60-frame scroll while expanded, typing "accusamus" at 60 ms/key, ↑ wrap, and 20× Enter.
+
+**Cause found.**
+1. Parse, flatten, tree walks and search were each only 2–21 ms in the profile. The dominant cost during scrolling and typing was `jsxDEV` self time, meaning React elements being created: 530 ms over the 60-frame scroll, 118 ms while typing. `JsonRow` wasn't memoized, and its `highlight` prop was a callback recreated whenever the query or current match changed. So every scroll step rebuilt every row in the window, not just the rows scrolling in. Every keystroke re-rendered `ResponseViewer`, `JsonView` and every visible row, even though the search itself was debounced. React 19's development build makes each element far more expensive (about 9× more long-task time in dev than prod for the same scroll), which is why `bun run dev` felt frozen while the production build mostly didn't.
+2. The body was parsed twice per response: `isJson()` parsed it, then `parsedJson` parsed it again. `prettyBody()` re-ran `JSON.parse` + `JSON.stringify` on every render wherever it was used.
+3. `computeDefaultExpanded` counted all ~25,000 nodes just to decide small vs large (threshold 500). Every walk copied each container into an entries array, and `findJsonMatches` copied the ancestor list at every container.
+4. Separate bug: during the 200 ms debounce the counter showed **"0 results"** ("accusamus" really has 126).
+
+**Fix** (`frontend/src/features/response-viewer/`):
+- **Fix 1 (re-renders):** `JsonRow` is `memo`'d with stable props: `row` (the flattened row object, whose identity is stable until `flatRows` recomputes), `matchQuery` (the normalized query, but only for rows that actually match via the new pure `rowMatchesQuery`, otherwise `""`), `isActive`, and the stable `onToggle`. A new query re-renders only matching rows, moving between matches re-renders only the old and new current rows, and scrolling only mounts the rows entering the window. `JsonView` is `memo`'d too. The search box's live text moved out of `ResponseViewer` into a new `SearchBar` component that owns the input state and the debounce, so a keystroke re-renders only the bar. The acceptance script checks this directly: 0 DOM mutations inside the tree while typing. Highlighting is now one pure helper (`highlight.jsx`) shared by the tree and the Raw view.
+- **Fix 2:** `SearchBar` compares its live text with the query the parent applied. While they differ it shows **"Searching…"**, then the real count. "accusamus" → `Searching…` → `1 of 126`. Enter pressed during the debounce applies the query immediately instead of doing nothing.
+- **Fix 3:** the body is parsed once (`parsedBody`), and the pretty text is a `useMemo` built from that parse, only when needed. The small/large test stops counting at 500 nodes (`hasAtLeastNodes`). The walks iterate children in place (`forEachChild`) instead of copying entries arrays. `findJsonMatches` keeps one shared ancestor stack and copies it only when a match is recorded (126 copies instead of about 5,000). Measured on the real `/photos` data (Bun): collect-all-paths 4.7 ms, **flatten all 35,002 rows 14 ms** (worst 20 ms), default expansion 0.1 ms (was ~1.4 ms), "accusamus" search 6 ms. Flattening is far below the 200 ms line the user set, so no lazy flattening was added.
+- **Fix 4:** below the root, any container with more than 100 entries starts collapsed in every response, including "small" ones. The root is always open, and the other default-expansion rules are unchanged.
+- Tests: 10 new in `jsonSearch.test.js` covering `rowMatchesQuery` (including agreement with `findJsonMatches`) and the default-expansion rules. Frontend viewer suite 26/26; `bun test` from the repo root 51/51 across 4 files; `bun run build` and `git diff --check` clean.
+
+**Before/after timing.** The first before/after comparison, run in separate batches minutes apart, disagreed with itself: some production 4× rows looked *worse* after. That's machine noise on a shared WSL host, so no conclusion was drawn from it. The final numbers below come from serving both versions side by side (a git worktree of the pre-fix `HEAD` on :3001 against the working tree on :3000 for dev; the pre-fix and post-fix production builds on :4173/:4174). Before/after runs were interleaved, with their order swapped every round, 4 rounds each. Cells show the **median worst frame · median long-task total**, in ms.
+
+**dev build, 1x CPU** (n=4/4) — median worst frame ms · median long-task total ms
+
+| Phase | Before | After |
+|---|---|---|
+| Send → tree: worst frame | 150 · 151 | 166 · 147 |
+| Expand all | 83 · 96 | 75 · 84 |
+| Collapse all | 17 · 0 | 17 · 0 |
+| Scroll 60 frames (expanded) | 41 · 0 | 41 · 0 |
+| Type "accusamus" + search applies | 33 · 0 | 17 · 0 |
+| ↑ wrap 1 → 126 | 33 · 0 | 17 · 0 |
+| 20× Enter | 58 · 0 | 33 · 0 |
+| Network response → rows visible (ms) | 368 | 372 |
+| Worst single frame across runs: scroll / typing | 50 / 50 | 67 / 17 |
+| Counter while debouncing | 0 results | Searching… |
+
+**dev build, 4x CPU** (n=4/4) — median worst frame ms · median long-task total ms
+
+| Phase | Before | After |
+|---|---|---|
+| Send → tree: worst frame | 775 · 1344 | 741 · 960 |
+| Expand all | 408 · 410 | 375 · 389 |
+| Collapse all | 58 · 55 | 33 · 52 |
+| Scroll 60 frames (expanded) | 216 · 5726 | 158 · 4481 |
+| Type "accusamus" + search applies | 191 · 1210 | 108 · 112 |
+| ↑ wrap 1 → 126 | 175 · 276 | 158 · 216 |
+| 20× Enter | 266 · 3066 | 208 · 3010 |
+| Network response → rows visible (ms) | 1352 | 1061 |
+| Worst single frame across runs: scroll / typing | 267 / 217 | 450 / 117 |
+| Counter while debouncing | 0 results | Searching… |
+
+**prod build, 1x CPU** (n=4/4) — median worst frame ms · median long-task total ms
+
+| Phase | Before | After |
+|---|---|---|
+| Send → tree: worst frame | 67 · 0 | 67 · 0 |
+| Expand all | 33 · 0 | 33 · 0 |
+| Collapse all | 17 · 0 | 17 · 0 |
+| Scroll 60 frames (expanded) | 17 · 0 | 17 · 0 |
+| Type "accusamus" + search applies | 17 · 0 | 17 · 0 |
+| ↑ wrap 1 → 126 | 17 · 0 | 17 · 0 |
+| 20× Enter | 17 · 0 | 17 · 0 |
+| Network response → rows visible (ms) | 532 | 127 |
+| Worst single frame across runs: scroll / typing | 17 / 33 | 17 / 17 |
+| Counter while debouncing | 0 results | Searching… |
+
+**prod build, 4x CPU** (n=4/4) — median worst frame ms · median long-task total ms
+
+| Phase | Before | After |
+|---|---|---|
+| Send → tree: worst frame | 308 · 406 | 250 · 386 |
+| Expand all | 183 · 192 | 183 · 167 |
+| Collapse all | 17 · 0 | 33 · 0 |
+| Scroll 60 frames (expanded) | 50 · 0 | 50 · 0 |
+| Type "accusamus" + search applies | 75 · 71 | 67 · 72 |
+| ↑ wrap 1 → 126 | 33 · 0 | 33 · 0 |
+| 20× Enter | 75 · 56 | 58 · 0 |
+| Network response → rows visible (ms) | 490 | 561 |
+| Worst single frame across runs: scroll / typing | 50 / 83 | 67 / 83 |
+| Counter while debouncing | 0 results | Searching… |
+
+
+**Reading the numbers honestly:**
+- **Dev build, normal CPU (the stated target, no frame over ~50 ms):** medians are within target after the fix: scroll 41 ms, typing 17 ms, ↑ wrap 17 ms, 20× Enter 33 ms. The warm "before" was already close on scroll (41 ms). The earlier 267–533 ms scroll frames came from colder runs, so the gain here is in typing and navigation (33→17, 58→33). One of the four "after" scroll runs hit a 67 ms frame (the worst "before" run was 50 ms), so "never over 50 ms" isn't guaranteed on this machine.
+- **Dev build, 4× CPU:** typing went from 1,210 ms of long tasks to 112 ms (typing no longer touches the tree). Scrolling went from 5.7 s to 4.5 s blocked but is still heavy. The profile shows what remains is React 19's development-only cost of creating each new row as it scrolls in, which memoization can't remove and which doesn't exist in production.
+- **Production:** at normal CPU every phase sits at the 17–33 ms frame floor, before and after. The drop in "network response → rows visible" from 532 to 127 ms at normal CPU reverses at 4× (490→561), so I'm not claiming it.
+- Functional acceptance (20/20, dev server, scratchpad `acceptance.cjs`): `/todos/1`, `POST /photos` and `/users` fully expanded as before; `/photos` rendered 402–443 ms after the network response, root open and items collapsed; "accusamus" → `Searching…` → `1 of 126`, first match expanded into view and highlighted; ↑ wraps 1→126 and ↓ wraps 126→1; Enter during the debounce applies immediately; "0 results" only for real no-match queries; Headers→Raw keeps the query (bar hidden on Headers); Expand all → 35,002 rows with 39 in the DOM; Collapse all → `[5000 items]`; keyboard toggle, Save and the Headers tab work; zero console errors or warnings. (One failure in the first run was a test-selector bug that matched the *request* builder's Headers tab. The pre-fix build behaved identically, and the fixed selector passes.)
+
+**Status:** Awaiting approval.
