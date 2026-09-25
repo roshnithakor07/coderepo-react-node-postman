@@ -2,7 +2,13 @@ import { z } from "zod";
 import { authService } from "./auth.service.js";
 
 const loginSchema = z
-	.object({ email: z.email().max(254).transform((value) => value.toLowerCase()), password: z.string().min(1).max(200) })
+	.object({
+		email: z
+			.email()
+			.max(254)
+			.transform((value) => value.toLowerCase()),
+		password: z.string().min(1).max(200),
+	})
 	.strict();
 
 export async function login(request, response, next) {

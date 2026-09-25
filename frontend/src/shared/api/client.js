@@ -20,8 +20,7 @@ export async function request(path, options = {}) {
 	});
 	if (response.status === 204) return null;
 	const contentType = response.headers?.get?.("content-type") || "";
-	const payload =
-		contentType.includes("application/json") || !response.headers ? await response.json() : null;
+	const payload = contentType.includes("application/json") || !response.headers ? await response.json() : null;
 	if (!response.ok) {
 		const code = payload?.error?.code;
 		const message = payload?.error?.message || `Service returned ${response.status}.`;

@@ -1,6 +1,12 @@
 import axios from "axios";
 import { historyService } from "../history/history.service.js";
-import { substituteVariables, substituteAuth, buildAuthHeaders, buildAuthHeaderParam, buildAuthQueryParam } from "../../shared/utils/request-transform.js";
+import {
+	substituteVariables,
+	substituteAuth,
+	buildAuthHeaders,
+	buildAuthHeaderParam,
+	buildAuthQueryParam,
+} from "../../shared/utils/request-transform.js";
 
 export const proxyService = {
 	async execute(accountId, requestData, envVariables = []) {
@@ -90,7 +96,8 @@ export const proxyService = {
 			});
 
 			const responseTime = Date.now() - startTime;
-			const responseBody = typeof axiosResponse.data === "object" ? JSON.stringify(axiosResponse.data, null, 2) : String(axiosResponse.data ?? "");
+			const responseBody =
+				typeof axiosResponse.data === "object" ? JSON.stringify(axiosResponse.data, null, 2) : String(axiosResponse.data ?? "");
 			const responseSize = Buffer.byteLength(responseBody, "utf8");
 
 			const result = {

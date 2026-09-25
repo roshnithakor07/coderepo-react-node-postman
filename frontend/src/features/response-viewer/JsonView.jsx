@@ -89,7 +89,10 @@ const JsonRow = memo(function JsonRow({ row, matchQuery, isActive, onToggle }) {
 		return (
 			<div className="json-vrow" style={style}>
 				<span className="json-vrow-gutter" />
-				<span className="json-punct">{row.isArray ? "]" : "}"}{row.needsComma ? "," : ""}</span>
+				<span className="json-punct">
+					{row.isArray ? "]" : "}"}
+					{row.needsComma ? "," : ""}
+				</span>
 			</div>
 		);
 	}
@@ -98,19 +101,29 @@ const JsonRow = memo(function JsonRow({ row, matchQuery, isActive, onToggle }) {
 			<div className="json-vrow" style={style}>
 				<span className="json-vrow-gutter" />
 				<RowKeyPrefix row={row} query={matchQuery} isActive={isActive} />
-				<span className="json-punct">{row.isArray ? "[]" : "{}"}{row.needsComma ? "," : ""}</span>
+				<span className="json-punct">
+					{row.isArray ? "[]" : "{}"}
+					{row.needsComma ? "," : ""}
+				</span>
 			</div>
 		);
 	}
 	if (row.type === "collapsed") {
-		const countLabel = row.isArray ? `${row.entryCount} item${row.entryCount === 1 ? "" : "s"}` : `${row.entryCount} key${row.entryCount === 1 ? "" : "s"}`;
+		const countLabel = row.isArray
+			? `${row.entryCount} item${row.entryCount === 1 ? "" : "s"}`
+			: `${row.entryCount} key${row.entryCount === 1 ? "" : "s"}`;
 		return (
 			<div className="json-vrow" style={style}>
 				<RowGutter row={row} onToggle={onToggle} />
 				<RowKeyPrefix row={row} query={matchQuery} isActive={isActive} />
 				<span className="json-punct">{row.isArray ? "[" : "{"}</span>
-				<button type="button" className="json-collapsed-summary" onClick={() => onToggle(row.path)}>{countLabel}</button>
-				<span className="json-punct">{row.isArray ? "]" : "}"}{row.needsComma ? "," : ""}</span>
+				<button type="button" className="json-collapsed-summary" onClick={() => onToggle(row.path)}>
+					{countLabel}
+				</button>
+				<span className="json-punct">
+					{row.isArray ? "]" : "}"}
+					{row.needsComma ? "," : ""}
+				</span>
 			</div>
 		);
 	}
@@ -150,7 +163,15 @@ function rootOffsetWithinContainer(container, root) {
 	return container.scrollTop + (rootRect.top - containerRect.top);
 }
 
-export const JsonView = memo(function JsonView({ value, expandedPaths, onToggle, query = "", activePath, scrollContainerRef, scrollNonce }) {
+export const JsonView = memo(function JsonView({
+	value,
+	expandedPaths,
+	onToggle,
+	query = "",
+	activePath,
+	scrollContainerRef,
+	scrollNonce,
+}) {
 	const flatRows = useMemo(() => flattenTree(value, expandedPaths), [value, expandedPaths]);
 	const rootRef = useRef(null);
 	const [range, setRange] = useState({ start: 0, end: 80 });
@@ -163,7 +184,7 @@ export const JsonView = memo(function JsonView({ value, expandedPaths, onToggle,
 		const relativeScroll = Math.max(0, container.scrollTop - rootOffset);
 		const start = Math.max(0, Math.floor(relativeScroll / ROW_HEIGHT) - OVERSCAN);
 		const visibleRowCount = Math.ceil(container.clientHeight / ROW_HEIGHT) + OVERSCAN * 2;
-		setRange(prev => {
+		setRange((prev) => {
 			const end = Math.min(flatRows.length, start + visibleRowCount);
 			return prev.start === start && prev.end === end ? prev : { start, end };
 		});
@@ -176,13 +197,18 @@ export const JsonView = memo(function JsonView({ value, expandedPaths, onToggle,
 		container.addEventListener("scroll", recomputeRange, { passive: true });
 		const ro = new ResizeObserver(recomputeRange);
 		ro.observe(container);
-		return () => { container.removeEventListener("scroll", recomputeRange); ro.disconnect(); };
+		return () => {
+			container.removeEventListener("scroll", recomputeRange);
+			ro.disconnect();
+		};
 	}, [recomputeRange, scrollContainerRef]);
 
 	// flatRows changed (data, or a node was expanded/collapsed) — the old
 	// range may now be wrong (shorter list, or content shifted under an
 	// unchanged scrollTop), so re-derive it.
-	useEffect(() => { recomputeRange(); }, [flatRows, recomputeRange]);
+	useEffect(() => {
+		recomputeRange();
+	}, [flatRows, recomputeRange]);
 
 	// Scrolls a specific row into view once it exists in flatRows — the
 	// caller is expected to have already added its ancestor paths to
@@ -190,7 +216,7 @@ export const JsonView = memo(function JsonView({ value, expandedPaths, onToggle,
 	// anything itself.
 	useEffect(() => {
 		if (activePath == null) return;
-		const idx = flatRows.findIndex(r => r.path === activePath);
+		const idx = flatRows.findIndex((r) => r.path === activePath);
 		if (idx === -1) return;
 		const container = scrollContainerRef.current;
 		const root = rootRef.current;
@@ -208,7 +234,7 @@ export const JsonView = memo(function JsonView({ value, expandedPaths, onToggle,
 				{/* An expanded container contributes both an "open" and a "close" row
 				    sharing the same path — key on path+type so React never sees a
 				    collision (it did before this fix; see transcripts/claude-session.md). */}
-				{visible.map(row => {
+				{visible.map((row) => {
 					const isMatch = rowMatchesQuery(row, query);
 					return (
 						<JsonRow

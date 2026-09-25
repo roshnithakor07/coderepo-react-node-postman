@@ -23,7 +23,9 @@ export function WorkspaceLogin({ error, loading, onLogin }) {
 		<div className="login-page">
 			<div className="login-card">
 				<div className="login-brand">
-					<div className="brand-icon"><BrandIcon /></div>
+					<div className="brand-icon">
+						<BrandIcon />
+					</div>
 					<span>Reqway</span>
 				</div>
 				<h1>Welcome back</h1>
@@ -31,19 +33,42 @@ export function WorkspaceLogin({ error, loading, onLogin }) {
 				<form onSubmit={handleSubmit}>
 					<div className="login-field">
 						<label htmlFor="login-email">Email address</label>
-						<input id="login-email" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" required disabled={loading} />
+						<input
+							id="login-email"
+							type="email"
+							value={email}
+							onChange={(e) => setEmail(e.target.value)}
+							placeholder="you@example.com"
+							autoComplete="email"
+							required
+							disabled={loading}
+						/>
 					</div>
 					<div className="login-field">
 						<label htmlFor="login-password">Password</label>
-						<input id="login-password" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" autoComplete="current-password" required disabled={loading} />
+						<input
+							id="login-password"
+							type="password"
+							value={password}
+							onChange={(e) => setPassword(e.target.value)}
+							placeholder="••••••••"
+							autoComplete="current-password"
+							required
+							disabled={loading}
+						/>
 					</div>
 					<button className="login-submit" type="submit" disabled={loading}>
 						{loading ? "Signing in…" : "Sign in"}
 					</button>
-					{error && <div className="login-error" role="alert">{error}</div>}
+					{error && (
+						<div className="login-error" role="alert">
+							{error}
+						</div>
+					)}
 				</form>
 				<div className="login-hint">
-					<strong>Demo credentials</strong> — password: <strong>password123</strong><br />
+					<strong>Demo credentials</strong> — password: <strong>password123</strong>
+					<br />
 					alex.rivera@postman.dev · jordan.kim@postman.dev
 				</div>
 			</div>

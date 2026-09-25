@@ -6,10 +6,29 @@ import { buildDisplayUrl, syncParamsFromUrlEdit, tokenizeUrlForDisplay } from ".
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
 const BODY_TYPES = ["none", "json", "form", "text", "xml"];
 
-const METHOD_COLORS = { GET: "#4ade80", POST: "#60a5fa", PUT: "#fbbf24", PATCH: "#c084fc", DELETE: "#f87171", HEAD: "#34d399", OPTIONS: "#fb923c" };
+const METHOD_COLORS = {
+	GET: "#4ade80",
+	POST: "#60a5fa",
+	PUT: "#fbbf24",
+	PATCH: "#c084fc",
+	DELETE: "#f87171",
+	HEAD: "#34d399",
+	OPTIONS: "#fb923c",
+};
 
-function countEnabled(rows) { return (rows || []).filter(r => r.enabled && r.key).length; }
-function hasAuth(auth) { if (!auth || auth.type === "none") return false; return auth.type === "bearer" ? !!auth.token : auth.type === "basic" ? !!auth.username : auth.type === "apikey" ? !!auth.apiKeyName : false; }
+function countEnabled(rows) {
+	return (rows || []).filter((r) => r.enabled && r.key).length;
+}
+function hasAuth(auth) {
+	if (!auth || auth.type === "none") return false;
+	return auth.type === "bearer"
+		? !!auth.token
+		: auth.type === "basic"
+			? !!auth.username
+			: auth.type === "apikey"
+				? !!auth.apiKeyName
+				: false;
+}
 
 export function RequestBuilder({ request, onRequestChange, onSend, onSave, sending, activeEnvironmentVariables = [] }) {
 	const [activeTab, setActiveTab] = useState("Params");
@@ -36,10 +55,10 @@ export function RequestBuilder({ request, onRequestChange, onSend, onSave, sendi
 	const displayUrl = buildDisplayUrl(url, params);
 
 	const tabs = [
-		{ label: "Params",  badge: countEnabled(params) || null },
-		{ label: "Auth",    badge: hasAuth(auth) ? "●" : null },
+		{ label: "Params", badge: countEnabled(params) || null },
+		{ label: "Auth", badge: hasAuth(auth) ? "●" : null },
 		{ label: "Headers", badge: countEnabled(headers) || null },
-		{ label: "Body",    badge: bodyType !== "none" && body ? "●" : null },
+		{ label: "Body", badge: bodyType !== "none" && body ? "●" : null },
 	];
 
 	return (
@@ -48,21 +67,29 @@ export function RequestBuilder({ request, onRequestChange, onSend, onSave, sendi
 				<select
 					className="method-select"
 					value={method}
-					onChange={e => set("method", e.target.value)}
+					onChange={(e) => set("method", e.target.value)}
 					style={{ color: METHOD_COLORS[method] || "inherit" }}
 					aria-label="HTTP method"
 				>
-					{METHODS.map(m => <option key={m} value={m} style={{ color: METHOD_COLORS[m] }}>{m}</option>)}
+					{METHODS.map((m) => (
+						<option key={m} value={m} style={{ color: METHOD_COLORS[m] }}>
+							{m}
+						</option>
+					))}
 				</select>
 
 				<div className="url-input-wrap">
 					<div className="url-highlight" ref={overlayRef} aria-hidden="true">
 						{displayUrl
 							? tokenizeUrlForDisplay(displayUrl).map((token, i) =>
-								token.type === "variable"
-									? <span key={i} className={isVariableResolved(token.key) ? "url-var-resolved" : "url-var-unresolved"}>{token.value}</span>
-									: <span key={i}>{token.value}</span>
-							)
+									token.type === "variable" ? (
+										<span key={i} className={isVariableResolved(token.key) ? "url-var-resolved" : "url-var-unresolved"}>
+											{token.value}
+										</span>
+									) : (
+										<span key={i}>{token.value}</span>
+									),
+								)
 							: null}
 					</div>
 					<input
@@ -71,7 +98,7 @@ export function RequestBuilder({ request, onRequestChange, onSend, onSave, sendi
 						value={displayUrl}
 						onChange={onUrlChange}
 						onScroll={onUrlScroll}
-						onKeyDown={e => (e.key === "Enter" && (e.ctrlKey || e.metaKey)) && onSend()}
+						onKeyDown={(e) => e.key === "Enter" && (e.ctrlKey || e.metaKey) && onSend()}
 						placeholder="Enter request URL — use {{variable}} for environment values"
 						aria-label="Request URL"
 						spellCheck={false}
@@ -86,11 +113,21 @@ export function RequestBuilder({ request, onRequestChange, onSend, onSave, sendi
 				</button>
 			</div>
 
-			{sending && <div className="request-loading-bar" role="progressbar" aria-label="Sending request"><span /></div>}
+			{sending && (
+				<div className="request-loading-bar" role="progressbar" aria-label="Sending request">
+					<span />
+				</div>
+			)}
 
 			<div className="tabs" role="tablist">
 				{tabs.map(({ label, badge }) => (
-					<button key={label} role="tab" className={`tab-btn ${activeTab === label ? "active" : ""}`} aria-selected={activeTab === label} onClick={() => setActiveTab(label)}>
+					<button
+						key={label}
+						role="tab"
+						className={`tab-btn ${activeTab === label ? "active" : ""}`}
+						aria-selected={activeTab === label}
+						onClick={() => setActiveTab(label)}
+					>
 						{label}
 						{badge != null && <span className="tab-count">{badge}</span>}
 					</button>
@@ -98,16 +135,31 @@ export function RequestBuilder({ request, onRequestChange, onSend, onSave, sendi
 			</div>
 
 			<div className="tab-panel" role="tabpanel">
-				{activeTab === "Params"  && <KeyValueEditor rows={params}  onChange={v => set("params",  v)} keyPlaceholder="Parameter" valuePlaceholder="Value" />}
-				{activeTab === "Auth"    && <AuthPanel auth={auth} onChange={v => set("auth", v)} />}
-				{activeTab === "Headers" && <KeyValueEditor rows={headers} onChange={v => set("headers", v)} keyPlaceholder="Header name" valuePlaceholder="Header value" />}
-				{activeTab === "Body"    && (
+				{activeTab === "Params" && (
+					<KeyValueEditor rows={params} onChange={(v) => set("params", v)} keyPlaceholder="Parameter" valuePlaceholder="Value" />
+				)}
+				{activeTab === "Auth" && <AuthPanel auth={auth} onChange={(v) => set("auth", v)} />}
+				{activeTab === "Headers" && (
+					<KeyValueEditor
+						rows={headers}
+						onChange={(v) => set("headers", v)}
+						keyPlaceholder="Header name"
+						valuePlaceholder="Header value"
+					/>
+				)}
+				{activeTab === "Body" && (
 					<div className="body-panel">
 						<div className="body-type-row">
 							<span className="body-type-label">Body type</span>
-							{BODY_TYPES.map(t => (
+							{BODY_TYPES.map((t) => (
 								<label className="body-type-radio" key={t}>
-									<input type="radio" name="bodyType" value={t} checked={bodyType === t} onChange={() => set("bodyType", t)} />
+									<input
+										type="radio"
+										name="bodyType"
+										value={t}
+										checked={bodyType === t}
+										onChange={() => set("bodyType", t)}
+									/>
 									{t}
 								</label>
 							))}
@@ -116,7 +168,7 @@ export function RequestBuilder({ request, onRequestChange, onSend, onSave, sendi
 							<textarea
 								className="body-textarea"
 								value={body}
-								onChange={e => set("body", e.target.value)}
+								onChange={(e) => set("body", e.target.value)}
 								placeholder={bodyType === "json" ? '{\n  "key": "value"\n}' : "Request body content"}
 								spellCheck={false}
 							/>

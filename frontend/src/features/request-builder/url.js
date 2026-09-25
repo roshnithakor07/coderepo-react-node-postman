@@ -21,10 +21,13 @@ function splitUrl(url) {
 
 function parseQueryPairs(query) {
 	if (!query) return [];
-	return query.split("&").filter(Boolean).map((pair) => {
-		const eqIndex = pair.indexOf("=");
-		return eqIndex === -1 ? [pair, ""] : [pair.slice(0, eqIndex), pair.slice(eqIndex + 1)];
-	});
+	return query
+		.split("&")
+		.filter(Boolean)
+		.map((pair) => {
+			const eqIndex = pair.indexOf("=");
+			return eqIndex === -1 ? [pair, ""] : [pair.slice(0, eqIndex), pair.slice(eqIndex + 1)];
+		});
 }
 
 // Pure, display-only: mirrors what the backend already sends (url + enabled

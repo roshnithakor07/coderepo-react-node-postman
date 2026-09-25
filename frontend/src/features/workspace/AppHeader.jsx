@@ -9,8 +9,14 @@ function BrandIcon() {
 }
 
 export function AppHeader({ account, environments, onToggleSidebar, onEnvChange, onOpenEnvs, onLogout }) {
-	const activeEnv = environments.find(e => e.isActive);
-	const initials = account?.name?.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase() || "?";
+	const activeEnv = environments.find((e) => e.isActive);
+	const initials =
+		account?.name
+			?.split(" ")
+			.map((w) => w[0])
+			.join("")
+			.slice(0, 2)
+			.toUpperCase() || "?";
 
 	return (
 		<header className="app-header">
@@ -18,7 +24,9 @@ export function AppHeader({ account, environments, onToggleSidebar, onEnvChange,
 				☰
 			</button>
 			<div className="header-brand">
-				<div className="brand-icon"><BrandIcon /></div>
+				<div className="brand-icon">
+					<BrandIcon />
+				</div>
 				<span>Reqway</span>
 			</div>
 
@@ -29,12 +37,14 @@ export function AppHeader({ account, environments, onToggleSidebar, onEnvChange,
 						id="env-select"
 						className="env-select"
 						value={activeEnv?._id || ""}
-						onChange={e => onEnvChange(e.target.value)}
+						onChange={(e) => onEnvChange(e.target.value)}
 						aria-label="Active environment"
 					>
 						<option value="">No environment</option>
-						{environments.map(env => (
-							<option key={env._id} value={env._id}>{env.name}</option>
+						{environments.map((env) => (
+							<option key={env._id} value={env._id}>
+								{env.name}
+							</option>
 						))}
 					</select>
 					<button className="icon-btn" onClick={onOpenEnvs} title="Manage environments" aria-label="Manage environments">
@@ -49,7 +59,9 @@ export function AppHeader({ account, environments, onToggleSidebar, onEnvChange,
 					<span>{account?.name?.split(" ")[0] || "User"}</span>
 				</div>
 
-				<button className="logout-btn" onClick={onLogout}>Sign out</button>
+				<button className="logout-btn" onClick={onLogout}>
+					Sign out
+				</button>
 			</div>
 		</header>
 	);

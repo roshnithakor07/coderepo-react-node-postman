@@ -16,7 +16,11 @@ export const historyRepository = {
 		if (cursor) {
 			filter.$or = [{ createdAt: { $lt: cursor.createdAt } }, { createdAt: cursor.createdAt, _id: { $lt: cursor.id } }];
 		}
-		const rows = await History.find(filter).select(SUMMARY_FIELDS).sort({ createdAt: -1, _id: -1 }).limit(limit + 1).lean();
+		const rows = await History.find(filter)
+			.select(SUMMARY_FIELDS)
+			.sort({ createdAt: -1, _id: -1 })
+			.limit(limit + 1)
+			.lean();
 		const hasMore = rows.length > limit;
 		const items = hasMore ? rows.slice(0, limit) : rows;
 		return { items, hasMore };

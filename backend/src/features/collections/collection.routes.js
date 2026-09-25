@@ -1,5 +1,14 @@
 import { Router } from "express";
-import { listCollections, createCollection, updateCollection, deleteCollection, listRequests, createRequest, updateRequest, deleteRequest } from "./collection.controller.js";
+import {
+	listCollections,
+	createCollection,
+	updateCollection,
+	deleteCollection,
+	listRequests,
+	createRequest,
+	updateRequest,
+	deleteRequest,
+} from "./collection.controller.js";
 
 export const collectionRouter = Router();
 collectionRouter.get("/", listCollections);

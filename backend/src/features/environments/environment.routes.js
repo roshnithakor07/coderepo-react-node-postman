@@ -1,5 +1,11 @@
 import { Router } from "express";
-import { listEnvironments, createEnvironment, updateEnvironment, activateEnvironment, deleteEnvironment } from "./environment.controller.js";
+import {
+	listEnvironments,
+	createEnvironment,
+	updateEnvironment,
+	activateEnvironment,
+	deleteEnvironment,
+} from "./environment.controller.js";
 
 export const environmentRouter = Router();
 environmentRouter.get("/", listEnvironments);

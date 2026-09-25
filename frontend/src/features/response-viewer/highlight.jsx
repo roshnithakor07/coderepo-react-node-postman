@@ -13,9 +13,16 @@ export function highlightText(text, query, isCurrent = false) {
 	let i = 0;
 	while (i < source.length) {
 		const idx = lower.indexOf(query, i);
-		if (idx === -1) { parts.push(source.slice(i)); break; }
+		if (idx === -1) {
+			parts.push(source.slice(i));
+			break;
+		}
 		if (idx > i) parts.push(source.slice(i, idx));
-		parts.push(<mark key={idx} className={className}>{source.slice(idx, idx + query.length)}</mark>);
+		parts.push(
+			<mark key={idx} className={className}>
+				{source.slice(idx, idx + query.length)}
+			</mark>,
+		);
 		i = idx + query.length;
 	}
 	return parts;

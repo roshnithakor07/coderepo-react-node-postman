@@ -21,8 +21,20 @@ const accountRows = [
 
 async function clearDatabase() {
 	console.log("Clearing existing collections...");
-	await Promise.all([WorkspaceAccount.deleteMany({}), Collection.deleteMany({}), SavedRequest.deleteMany({}), Environment.deleteMany({}), History.deleteMany({})]);
-	await Promise.all([WorkspaceAccount.syncIndexes(), Collection.syncIndexes(), SavedRequest.syncIndexes(), Environment.syncIndexes(), History.syncIndexes()]);
+	await Promise.all([
+		WorkspaceAccount.deleteMany({}),
+		Collection.deleteMany({}),
+		SavedRequest.deleteMany({}),
+		Environment.deleteMany({}),
+		History.deleteMany({}),
+	]);
+	await Promise.all([
+		WorkspaceAccount.syncIndexes(),
+		Collection.syncIndexes(),
+		SavedRequest.syncIndexes(),
+		Environment.syncIndexes(),
+		History.syncIndexes(),
+	]);
 }
 
 async function seedAccounts() {
@@ -77,9 +89,25 @@ async function seedEnvironments(account) {
 async function seedCollections(account) {
 	console.log("\nSeeding collections and requests...");
 	const collections = await Collection.create([
-		{ accountId: account._id, name: "API Sandbox — HTTP Testing", description: "A curated set of requests against the bundled local API sandbox for verifying HTTP client behavior, entirely offline.", sortOrder: 0 },
-		{ accountId: account._id, name: "Sandbox REST API — Posts & Users", description: "Sample CRUD requests against the bundled local sandbox's posts, comments, and users resources.", sortOrder: 1 },
-		{ accountId: account._id, name: "Auth Playground", description: "Requests demonstrating bearer token, basic auth, and API key authentication flows.", sortOrder: 2 },
+		{
+			accountId: account._id,
+			name: "API Sandbox — HTTP Testing",
+			description:
+				"A curated set of requests against the bundled local API sandbox for verifying HTTP client behavior, entirely offline.",
+			sortOrder: 0,
+		},
+		{
+			accountId: account._id,
+			name: "Sandbox REST API — Posts & Users",
+			description: "Sample CRUD requests against the bundled local sandbox's posts, comments, and users resources.",
+			sortOrder: 1,
+		},
+		{
+			accountId: account._id,
+			name: "Auth Playground",
+			description: "Requests demonstrating bearer token, basic auth, and API key authentication flows.",
+			sortOrder: 2,
+		},
 	]);
 
 	const [sandboxHttp, sandboxRest, authCollection] = collections;
@@ -202,7 +230,8 @@ async function seedCollections(account) {
 			body: "",
 			bodyType: "none",
 			auth: { type: "none" },
-			description: "Delays the response by 5 seconds. Send this, then switch to a different request while it's still running to verify the loading indicator clears for the newly selected request and the delayed response is not applied once it arrives.",
+			description:
+				"Delays the response by 5 seconds. Send this, then switch to a different request while it's still running to verify the loading indicator clears for the newly selected request and the delayed response is not applied once it arrives.",
 			sortOrder: 8,
 		},
 
@@ -302,7 +331,8 @@ async function seedCollections(account) {
 			body: "",
 			bodyType: "none",
 			auth: { type: "bearer", token: "{{apiKey}}" },
-			description: "Sends a request with a Bearer token in the Authorization header. The sandbox verifies the token and echoes it back.",
+			description:
+				"Sends a request with a Bearer token in the Authorization header. The sandbox verifies the token and echoes it back.",
 			sortOrder: 0,
 		},
 		{
@@ -361,7 +391,11 @@ async function seedHistory(account) {
 			requestHeaders: { "X-Request-ID": "seed-001" },
 			requestBody: "",
 			responseHeaders: { "content-type": "application/json; charset=utf-8" },
-			responseBody: JSON.stringify({ method: "GET", url: "http://localhost:8000/api/v1/sandbox/get", headers: { "x-request-id": "seed-001" }, query: {} }, null, 2),
+			responseBody: JSON.stringify(
+				{ method: "GET", url: "http://localhost:8000/api/v1/sandbox/get", headers: { "x-request-id": "seed-001" }, query: {} },
+				null,
+				2,
+			),
 			responseSize: 246,
 			createdAt: new Date(now - 5 * 60 * 1000),
 		},
@@ -387,7 +421,16 @@ async function seedHistory(account) {
 			requestHeaders: {},
 			requestBody: "",
 			responseHeaders: { "content-type": "application/json; charset=utf-8" },
-			responseBody: JSON.stringify({ id: 1, userId: 1, title: "Getting started with the API sandbox", body: "This sandbox mirrors a typical REST resource so you can practice GET, POST, PUT, and DELETE without leaving your machine." }, null, 2),
+			responseBody: JSON.stringify(
+				{
+					id: 1,
+					userId: 1,
+					title: "Getting started with the API sandbox",
+					body: "This sandbox mirrors a typical REST resource so you can practice GET, POST, PUT, and DELETE without leaving your machine.",
+				},
+				null,
+				2,
+			),
 			responseSize: 292,
 			createdAt: new Date(now - 30 * 60 * 1000),
 		},
@@ -443,8 +486,18 @@ async function seed() {
 
 		// Seed a second account with one collection
 		const secondAccount = accounts[1];
-		await Collection.create({ accountId: secondAccount._id, name: "My Requests", description: "Personal request collection.", sortOrder: 0 });
-		await Environment.create({ accountId: secondAccount._id, name: "Local", isActive: true, variables: [{ key: "baseUrl", value: "http://localhost:3000", enabled: true }] });
+		await Collection.create({
+			accountId: secondAccount._id,
+			name: "My Requests",
+			description: "Personal request collection.",
+			sortOrder: 0,
+		});
+		await Environment.create({
+			accountId: secondAccount._id,
+			name: "Local",
+			isActive: true,
+			variables: [{ key: "baseUrl", value: "http://localhost:3000", enabled: true }],
+		});
 
 		console.log("\n========================================");
 		console.log("Seeding completed successfully!");

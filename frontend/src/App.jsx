@@ -15,7 +15,18 @@ import { Sidebar } from "./features/workspace/Sidebar.jsx";
 import { hasSessionToken, setSessionToken } from "./shared/api/client.js";
 import { ConfirmDialog } from "./shared/components/ConfirmDialog.jsx";
 
-const DEFAULT_REQUEST = { method: "GET", url: "", params: [{ key: "", value: "", enabled: false }, { key: "", value: "", enabled: false }], headers: [], body: "", bodyType: "none", auth: { type: "none" } };
+const DEFAULT_REQUEST = {
+	method: "GET",
+	url: "",
+	params: [
+		{ key: "", value: "", enabled: false },
+		{ key: "", value: "", enabled: false },
+	],
+	headers: [],
+	body: "",
+	bodyType: "none",
+	auth: { type: "none" },
+};
 
 function BrandIcon() {
 	return (
@@ -31,10 +42,14 @@ function AppBoot() {
 	return (
 		<div className="app-boot" aria-label="Loading Reqway" role="status">
 			<div className="app-boot-brand">
-				<div className="brand-icon"><BrandIcon /></div>
+				<div className="brand-icon">
+					<BrandIcon />
+				</div>
 				<span>Reqway</span>
 			</div>
-			<div className="app-boot-progress" aria-hidden="true"><span /></div>
+			<div className="app-boot-progress" aria-hidden="true">
+				<span />
+			</div>
 		</div>
 	);
 }
@@ -406,7 +421,9 @@ export function PostmanWorkspace({ account, onLogout }) {
 			{showEnvs && (
 				<EnvironmentsModal
 					environments={environments}
-					onClose={() => { setShowEnvs(false); }}
+					onClose={() => {
+						setShowEnvs(false);
+					}}
 					onCreate={handleCreateEnv}
 					onUpdate={handleUpdateEnv}
 					onActivate={handleActivateEnv}
@@ -423,12 +440,7 @@ export function PostmanWorkspace({ account, onLogout }) {
 				/>
 			)}
 
-			{confirmDialog && (
-				<ConfirmDialog
-					{...confirmDialog}
-					onCancel={() => setConfirmDialog(null)}
-				/>
-			)}
+			{confirmDialog && <ConfirmDialog {...confirmDialog} onCancel={() => setConfirmDialog(null)} />}
 		</div>
 	);
 }
@@ -476,7 +488,9 @@ export default function App() {
 			}
 		}
 		restore();
-		return () => { active = false; };
+		return () => {
+			active = false;
+		};
 	}, []);
 
 	async function login(email, password) {

@@ -8,17 +8,17 @@ A full-stack Postman-inspired API client that lets developers compose, send, org
 
 ## Technology stack
 
-| Layer | Technology |
-|---|---|
-| Frontend framework | React 19 + Vite 8 |
-| Backend framework | Express 5 (Node.js) |
-| Database | MongoDB + Mongoose 8 |
-| Package manager | Bun |
-| Runtime | Bun (backend), Vite dev server (frontend) |
-| Authentication | JSON Web Tokens (jsonwebtoken) |
-| HTTP proxy | Axios (server-side request execution) |
-| Validation | Zod |
-| Styling | Custom CSS design system (no component library) |
+| Layer              | Technology                                      |
+| ------------------ | ----------------------------------------------- |
+| Frontend framework | React 19 + Vite 8                               |
+| Backend framework  | Express 5 (Node.js)                             |
+| Database           | MongoDB + Mongoose 8                            |
+| Package manager    | Bun                                             |
+| Runtime            | Bun (backend), Vite dev server (frontend)       |
+| Authentication     | JSON Web Tokens (jsonwebtoken)                  |
+| HTTP proxy         | Axios (server-side request execution)           |
+| Validation         | Zod                                             |
+| Styling            | Custom CSS design system (no component library) |
 
 ---
 
@@ -82,6 +82,7 @@ Install these before running the project. Follow each step carefully.
 ### 1. Install Node.js (v18 or later)
 
 **Ubuntu / Debian / WSL:**
+
 ```bash
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt-get install -y nodejs
@@ -89,6 +90,7 @@ node --version   # should print v20.x.x
 ```
 
 **macOS:**
+
 ```bash
 brew install node
 node --version
@@ -101,6 +103,7 @@ node --version
 ### 2. Install Bun (package manager)
 
 **Linux / macOS / WSL:**
+
 ```bash
 curl -fsSL https://bun.sh/install | bash
 source ~/.bashrc        # or restart your terminal
@@ -108,6 +111,7 @@ bun --version           # should print 1.x.x
 ```
 
 **Alternative (via npm):**
+
 ```bash
 npm install -g bun
 bun --version
@@ -118,6 +122,7 @@ bun --version
 ### 3. Install MongoDB
 
 **Ubuntu / Debian / WSL:**
+
 ```bash
 # Import MongoDB public key
 curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc | \
@@ -141,6 +146,7 @@ mongod --version
 ```
 
 **macOS:**
+
 ```bash
 brew tap mongodb/brew
 brew install mongodb-community
@@ -187,11 +193,11 @@ bun start
 
 Once `bun start` is running, open your browser:
 
-| Service | URL |
-|---|---|
-| **Web App (Frontend)** | http://localhost:3000 |
-| **API Server (Backend)** | http://localhost:8000 |
-| **API Health Check** | http://localhost:8000/api/v1/health |
+| Service                  | URL                                 |
+| ------------------------ | ----------------------------------- |
+| **Web App (Frontend)**   | http://localhost:3000               |
+| **API Server (Backend)** | http://localhost:8000               |
+| **API Health Check**     | http://localhost:8000/api/v1/health |
 
 ---
 
@@ -203,13 +209,13 @@ Connects to `mongodb://localhost:27017/postman_db`.
 
 **Seeded data counts:**
 
-| Collection | Count |
-|---|---|
-| WorkspaceAccount | 2 |
-| Collection | 4 |
-| SavedRequest | 20 |
-| Environment | 4 |
-| History | 5 |
+| Collection       | Count |
+| ---------------- | ----- |
+| WorkspaceAccount | 2     |
+| Collection       | 4     |
+| SavedRequest     | 20    |
+| Environment      | 4     |
+| History          | 5     |
 
 ---
 
@@ -217,10 +223,10 @@ Connects to `mongodb://localhost:27017/postman_db`.
 
 Use these to log in — no registration needed:
 
-| Name | Email | Password |
-|---|---|---|
+| Name        | Email                   | Password    |
+| ----------- | ----------------------- | ----------- |
 | Alex Rivera | alex.rivera@postman.dev | password123 |
-| Jordan Kim | jordan.kim@postman.dev | password123 |
+| Jordan Kim  | jordan.kim@postman.dev  | password123 |
 
 > Alex Rivera has the full set of seeded collections, environments, and history. Jordan Kim has a minimal setup.
 
@@ -228,31 +234,34 @@ Use these to log in — no registration needed:
 
 ## Command reference
 
-| Command | What it does |
-|---|---|
-| `bun install && bash setup.sh --seed` | Install dependencies + seed MongoDB |
-| `bun start` | Start frontend (port 3000) + backend (port 8000) together |
-| `bun run dev:frontend` | Start frontend only with Vite HMR |
-| `bun run dev:backend` | Start backend only with file watcher |
-| `bun run seed` | Re-seed the database without restarting |
+| Command                               | What it does                                              |
+| ------------------------------------- | --------------------------------------------------------- |
+| `bun install && bash setup.sh --seed` | Install dependencies + seed MongoDB                       |
+| `bun start`                           | Start frontend (port 3000) + backend (port 8000) together |
+| `bun run dev:frontend`                | Start frontend only with Vite HMR                         |
+| `bun run dev:backend`                 | Start backend only with file watcher                      |
+| `bun run seed`                        | Re-seed the database without restarting                   |
 
 ---
 
 ## Troubleshooting
 
 **`bun: command not found`**
+
 ```bash
 source ~/.bashrc    # reload shell
 # or restart your terminal
 ```
 
 **`MongoDB connection failed`**
+
 ```bash
 sudo systemctl start mongod      # Linux/WSL
 brew services start mongodb-community  # macOS
 ```
 
 **`Port 3000 or 8000 already in use`**
+
 ```bash
 # Kill whatever is using the port
 sudo lsof -ti:3000 | xargs kill -9
@@ -262,6 +271,7 @@ bun start
 ```
 
 **`bun install fails`**
+
 ```bash
 # Try clearing cache
 bun pm cache rm
