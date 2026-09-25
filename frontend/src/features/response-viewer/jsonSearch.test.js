@@ -1,6 +1,6 @@
 import { describe, test, expect } from "bun:test";
-import { findJsonMatches, nextMatchIndex, countTextMatches } from "./jsonSearch.js";
-import { flattenTree } from "./jsonTree.js";
+import { findJsonMatches, nextMatchIndex, countTextMatches, rowMatchesQuery, normalizeQuery } from "./jsonSearch.js";
+import { flattenTree, computeDefaultExpanded } from "./jsonTree.js";
 
 // Run with `bun test` from frontend/ (or any ancestor Bun test picks the
 // file up from) — no separate test runner or dependency needed, `bun:test`
@@ -113,5 +113,55 @@ describe("countTextMatches", () => {
 	test("empty query or text yields zero", () => {
 		expect(countTextMatches("", "x")).toBe(0);
 		expect(countTextMatches("x", "")).toBe(0);
+	});
+});
+
+describe("rowMatchesQuery", () => {
+	const rows = flattenTree({ Title: "Accusamus beatae", id: 7, tags: ["x"], nested: { a: 1 } }, new Set(["$", "$.tags"]));
+	const byPath = (p, type) => rows.find(r => r.path === p && (!type || r.type === type));
+	test("matches a leaf by value, case-insensitively", () => {
+		expect(rowMatchesQuery(byPath("$.Title"), normalizeQuery("ACCUSAMUS"))).toBe(true);
+	});
+	test("matches an object key, including on a collapsed container row", () => {
+		expect(rowMatchesQuery(byPath("$.nested", "collapsed"), normalizeQuery("nest"))).toBe(true);
+	});
+	test("matches a number leaf by its string form", () => {
+		expect(rowMatchesQuery(byPath("$.id"), "7")).toBe(true);
+	});
+	test("never matches a close row or an empty query", () => {
+		expect(rowMatchesQuery(byPath("$.tags", "close"), "tags")).toBe(false);
+		expect(rowMatchesQuery(byPath("$.Title"), "")).toBe(false);
+	});
+	test("agrees with findJsonMatches on which rows match", () => {
+		const q = normalizeQuery(" a ");
+		const all = flattenTree({ Title: "Accusamus beatae", id: 7, tags: ["xa"], nested: { a: 1 } }, new Set(["$", "$.tags", "$.nested"]));
+		const matchingRowPaths = [...new Set(all.filter(r => rowMatchesQuery(r, q)).map(r => r.path))];
+		const matchPaths = [...new Set(findJsonMatches({ Title: "Accusamus beatae", id: 7, tags: ["xa"], nested: { a: 1 } }, q).matches.map(m => m.path))];
+		expect(matchingRowPaths).toEqual(matchPaths);
+	});
+});
+
+describe("computeDefaultExpanded", () => {
+	test("small response: everything expanded", () => {
+		expect([...computeDefaultExpanded({ a: { b: [1, 2] } })].sort()).toEqual(["$", "$.a", "$.a.b"]);
+	});
+	test("small response: a nested container over 100 entries starts collapsed, root still open", () => {
+		const big = Array.from({ length: 150 }, (_, i) => i);
+		const expanded = computeDefaultExpanded({ big, small: [1] });
+		expect(expanded.has("$")).toBe(true);
+		expect(expanded.has("$.small")).toBe(true);
+		expect(expanded.has("$.big")).toBe(false);
+	});
+	test("a big root array is still expanded (root is always open)", () => {
+		expect([...computeDefaultExpanded(Array.from({ length: 150 }, (_, i) => i))]).toEqual(["$"]);
+	});
+	test("large array root (the /photos shape): only the root expands", () => {
+		const photos = Array.from({ length: 5000 }, (_, i) => ({ id: i, title: "t", url: "u" }));
+		expect([...computeDefaultExpanded(photos)]).toEqual(["$"]);
+	});
+	test("large object root: small first-level containers expand, big ones don't", () => {
+		const root = { items: Array.from({ length: 600 }, (_, i) => i), meta: { page: 1 } };
+		const expanded = computeDefaultExpanded(root);
+		expect([...expanded].sort()).toEqual(["$", "$.meta"]);
 	});
 });

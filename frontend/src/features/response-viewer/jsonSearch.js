@@ -12,6 +12,12 @@
 // time, exactly when the user navigates to it. See ResponseViewer.jsx's
 // jump-to-match effect.
 
+// The one place a raw search-box string becomes the query every matcher
+// and highlighter uses, so counting and highlighting can never disagree.
+export function normalizeQuery(rawQuery) {
+	return (rawQuery ?? "").trim().toLowerCase();
+}
+
 function valueMatches(value, query) {
 	if (value === null) return "null".includes(query);
 	if (typeof value === "boolean") return String(value).includes(query);
@@ -23,28 +29,49 @@ function valueMatches(value, query) {
 // (the same pre-order a flatten() walk visits, so "next match" reads top to
 // bottom the way the user would scroll).
 export function findJsonMatches(root, rawQuery) {
-	const query = rawQuery.trim().toLowerCase();
+	const query = normalizeQuery(rawQuery);
 	if (!query) return { count: 0, matches: [] };
 
 	const matches = [];
+	// One shared stack of the current node's ancestor paths, copied only
+	// when a match is recorded — this walk visits every node of a large
+	// response, so it avoids per-container allocations (entries arrays,
+	// ancestor-list copies) on the far more common no-match path.
+	const ancestors = [];
 
-	function walk(value, path, ancestorPaths) {
-		if (value !== null && typeof value === "object") {
-			const isArray = Array.isArray(value);
-			const entries = isArray ? value.map((v, i) => [String(i), v]) : Object.entries(value);
-			const nextAncestors = [...ancestorPaths, path];
-			for (const [key, val] of entries) {
-				const childPath = `${path}.${key}`;
-				if (!isArray && key.toLowerCase().includes(query)) matches.push({ path: childPath, ancestorPaths: nextAncestors });
-				walk(val, childPath, nextAncestors);
-			}
-			return;
-		}
-		if (valueMatches(value, query)) matches.push({ path, ancestorPaths });
+	function visitChild(key, val, path, isArray) {
+		const childPath = `${path}.${key}`;
+		if (!isArray && key.toLowerCase().includes(query)) matches.push({ path: childPath, ancestorPaths: ancestors.slice() });
+		walk(val, childPath);
 	}
 
-	walk(root, "$", []);
+	function walk(value, path) {
+		if (value === null || typeof value !== "object") {
+			if (valueMatches(value, query)) matches.push({ path, ancestorPaths: ancestors.slice() });
+			return;
+		}
+		ancestors.push(path);
+		if (Array.isArray(value)) {
+			for (let i = 0; i < value.length; i++) visitChild(String(i), value[i], path, true);
+		} else {
+			for (const key of Object.keys(value)) visitChild(key, value[key], path, false);
+		}
+		ancestors.pop();
+	}
+
+	walk(root, "$");
 	return { count: matches.length, matches };
+}
+
+// Whether one flattened row (see jsonTree.js) contains a match — by the
+// same rules findJsonMatches counts with: an object key, or a leaf's value.
+// `query` must already be normalized. JsonView uses this to hand the query
+// only to matching rows, so rows without a match keep identical props and
+// their memoized render is skipped when the query changes.
+export function rowMatchesQuery(row, query) {
+	if (!query) return false;
+	if (row.key != null && row.key.toLowerCase().includes(query)) return true;
+	return row.type === "leaf" && valueMatches(row.value, query);
 }
 
 // Pure next/prev-with-wrap index math for search navigation — extracted so
@@ -60,7 +87,7 @@ export function nextMatchIndex(current, delta, total) {
 // Pretty body) instead of a parsed tree — just an occurrence count, no
 // paths to expand.
 export function countTextMatches(text, rawQuery) {
-	const query = rawQuery.trim().toLowerCase();
+	const query = normalizeQuery(rawQuery);
 	if (!query || !text) return 0;
 	const lower = text.toLowerCase();
 	let count = 0;

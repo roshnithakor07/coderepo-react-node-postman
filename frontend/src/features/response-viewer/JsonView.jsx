@@ -1,5 +1,7 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { memo, useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { flattenTree } from "./jsonTree.js";
+import { rowMatchesQuery } from "./jsonSearch.js";
+import { highlightText } from "./highlight.jsx";
 
 // Self-written, virtualized JSON tree renderer: syntax highlighting +
 // collapsible objects/arrays + windowed rendering. No dependency (no
@@ -23,16 +25,24 @@ import { flattenTree } from "./jsonTree.js";
 // at once. ROW_HEIGHT must stay in sync with .json-vrow's CSS height/
 // line-height — the virtualization math assumes every row is exactly this
 // tall.
-const identity = (text) => text;
+//
+// Re-render model: JsonRow is memoized, and its props are all stable for a
+// row whose match state didn't change — `row` objects keep their identity
+// until flatRows is recomputed, `onToggle` is a stable callback, and only
+// rows that actually contain a match receive the (normalized) query, so a
+// new query re-renders just the matching rows and moving between matches
+// re-renders just the old and new current rows. Scrolling only mounts the
+// rows entering the window. JsonView itself is memoized and never receives
+// the search box's live text, so typing doesn't render the tree at all.
 export const ROW_HEIGHT = 20;
 const OVERSCAN = 12;
 const INDENT_PX = 14;
 
-function JsonPrimitive({ value, highlight, path }) {
-	if (value === null) return <span className="json-null">{highlight("null", path)}</span>;
-	if (typeof value === "boolean") return <span className="json-bool">{highlight(String(value), path)}</span>;
-	if (typeof value === "number") return <span className="json-number">{highlight(String(value), path)}</span>;
-	return <span className="json-string">"{highlight(String(value), path)}"</span>;
+function JsonPrimitive({ value, query, isActive }) {
+	if (value === null) return <span className="json-null">{highlightText("null", query, isActive)}</span>;
+	if (typeof value === "boolean") return <span className="json-bool">{highlightText(String(value), query, isActive)}</span>;
+	if (typeof value === "number") return <span className="json-number">{highlightText(String(value), query, isActive)}</span>;
+	return <span className="json-string">"{highlightText(value, query, isActive)}"</span>;
 }
 
 function RowGutter({ row, onToggle }) {
@@ -52,23 +62,25 @@ function RowGutter({ row, onToggle }) {
 	);
 }
 
-function RowKeyPrefix({ row, highlight }) {
+function RowKeyPrefix({ row, query, isActive }) {
 	if (row.key === null) return null;
 	return (
 		<>
-			<span className="json-key">"{highlight(row.key, row.path)}"</span>
+			<span className="json-key">"{highlightText(row.key, query, isActive)}"</span>
 			<span className="json-punct">: </span>
 		</>
 	);
 }
 
-function JsonRow({ row, highlight, onToggle }) {
+// `matchQuery` is "" unless this row contains a match (see the re-render
+// model above); `isActive` is true only for the current match's row.
+const JsonRow = memo(function JsonRow({ row, matchQuery, isActive, onToggle }) {
 	const style = { paddingLeft: row.depth * INDENT_PX };
 	if (row.type === "open") {
 		return (
 			<div className="json-vrow" style={style}>
 				<RowGutter row={row} onToggle={onToggle} />
-				<RowKeyPrefix row={row} highlight={highlight} />
+				<RowKeyPrefix row={row} query={matchQuery} isActive={isActive} />
 				<span className="json-punct">{row.isArray ? "[" : "{"}</span>
 			</div>
 		);
@@ -85,7 +97,7 @@ function JsonRow({ row, highlight, onToggle }) {
 		return (
 			<div className="json-vrow" style={style}>
 				<span className="json-vrow-gutter" />
-				<RowKeyPrefix row={row} highlight={highlight} />
+				<RowKeyPrefix row={row} query={matchQuery} isActive={isActive} />
 				<span className="json-punct">{row.isArray ? "[]" : "{}"}{row.needsComma ? "," : ""}</span>
 			</div>
 		);
@@ -95,7 +107,7 @@ function JsonRow({ row, highlight, onToggle }) {
 		return (
 			<div className="json-vrow" style={style}>
 				<RowGutter row={row} onToggle={onToggle} />
-				<RowKeyPrefix row={row} highlight={highlight} />
+				<RowKeyPrefix row={row} query={matchQuery} isActive={isActive} />
 				<span className="json-punct">{row.isArray ? "[" : "{"}</span>
 				<button type="button" className="json-collapsed-summary" onClick={() => onToggle(row.path)}>{countLabel}</button>
 				<span className="json-punct">{row.isArray ? "]" : "}"}{row.needsComma ? "," : ""}</span>
@@ -106,20 +118,19 @@ function JsonRow({ row, highlight, onToggle }) {
 	return (
 		<div className="json-vrow" style={style} title={String(row.value)}>
 			<span className="json-vrow-gutter" />
-			<RowKeyPrefix row={row} highlight={highlight} />
-			<JsonPrimitive value={row.value} highlight={highlight} path={row.path} />
+			<RowKeyPrefix row={row} query={matchQuery} isActive={isActive} />
+			<JsonPrimitive value={row.value} query={matchQuery} isActive={isActive} />
 			{row.needsComma && <span className="json-punct">,</span>}
 		</div>
 	);
-}
+});
 
-// `highlight(text) => ReactNode` lets a caller (the in-response search
-// feature) wrap matched substrings without JsonView needing to know
-// anything about search. `expandedPaths`/`onToggle` are controlled from
-// ResponseViewer (not owned locally) because search "jump to match" and the
-// Expand-all/Collapse-all controls both need to drive expansion from
-// outside the tree. `scrollToPath`/`scrollNonce` request scrolling a
-// specific path into view once it's expanded (scrollNonce should change on
+// `query` is the normalized, debounced search query ("" for none) and
+// `activePath` the current match's row path. `expandedPaths`/`onToggle`
+// are controlled from ResponseViewer (not owned locally) because search
+// "jump to match" and the Expand-all/Collapse-all controls both need to
+// drive expansion from outside the tree. `activePath`/`scrollNonce` also
+// request scrolling that row into view once it's expanded (scrollNonce should change on
 // every navigation — even to the same path twice — so the effect reliably
 // re-fires; ResponseViewer passes the current match index for this).
 // How far the json-view root's top edge sits below the scroll container's
@@ -139,7 +150,7 @@ function rootOffsetWithinContainer(container, root) {
 	return container.scrollTop + (rootRect.top - containerRect.top);
 }
 
-export function JsonView({ value, expandedPaths, onToggle, highlight = identity, scrollContainerRef, scrollToPath, scrollNonce }) {
+export const JsonView = memo(function JsonView({ value, expandedPaths, onToggle, query = "", activePath, scrollContainerRef, scrollNonce }) {
 	const flatRows = useMemo(() => flattenTree(value, expandedPaths), [value, expandedPaths]);
 	const rootRef = useRef(null);
 	const [range, setRange] = useState({ start: 0, end: 80 });
@@ -178,8 +189,8 @@ export function JsonView({ value, expandedPaths, onToggle, highlight = identity,
 	// expandedPaths; this effect only locates and scrolls, it never expands
 	// anything itself.
 	useEffect(() => {
-		if (scrollToPath == null) return;
-		const idx = flatRows.findIndex(r => r.path === scrollToPath);
+		if (activePath == null) return;
+		const idx = flatRows.findIndex(r => r.path === activePath);
 		if (idx === -1) return;
 		const container = scrollContainerRef.current;
 		const root = rootRef.current;
@@ -188,7 +199,7 @@ export function JsonView({ value, expandedPaths, onToggle, highlight = identity,
 		const center = targetTop - container.clientHeight / 2 + ROW_HEIGHT / 2;
 		container.scrollTo({ top: Math.max(0, center) });
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [scrollToPath, scrollNonce, flatRows, scrollContainerRef]);
+	}, [activePath, scrollNonce, flatRows, scrollContainerRef]);
 
 	const visible = flatRows.slice(range.start, range.end);
 
@@ -198,8 +209,19 @@ export function JsonView({ value, expandedPaths, onToggle, highlight = identity,
 				{/* An expanded container contributes both an "open" and a "close" row
 				    sharing the same path — key on path+type so React never sees a
 				    collision (it did before this fix; see transcripts/claude-session.md). */}
-				{visible.map(row => <JsonRow key={`${row.path}:${row.type}`} row={row} highlight={highlight} onToggle={onToggle} />)}
+				{visible.map(row => {
+					const isMatch = rowMatchesQuery(row, query);
+					return (
+						<JsonRow
+							key={`${row.path}:${row.type}`}
+							row={row}
+							matchQuery={isMatch ? query : ""}
+							isActive={isMatch && row.path === activePath}
+							onToggle={onToggle}
+						/>
+					);
+				})}
 			</div>
 		</div>
 	);
-}
+});

@@ -1,7 +1,8 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
-import { statusClass, formatSize, formatTime, tryFormatJson, isJson } from "../../shared/utils/format.js";
+import { statusClass, formatSize, formatTime } from "../../shared/utils/format.js";
 import { JsonView } from "./JsonView.jsx";
-import { findJsonMatches, countTextMatches, nextMatchIndex } from "./jsonSearch.js";
+import { findJsonMatches, countTextMatches, nextMatchIndex, normalizeQuery } from "./jsonSearch.js";
+import { highlightText } from "./highlight.jsx";
 import { computeDefaultExpanded, collectAllContainerPaths } from "./jsonTree.js";
 
 // Above this size, the JSON tree defaults to collapsed/off in favor of Raw —
@@ -83,13 +84,61 @@ function SnippetPanel({ request, activeEnvironmentId, onGenerateSnippet }) {
 	);
 }
 
+// Owns the search box's live text and its debounce, so a keystroke only
+// re-renders this bar — never ResponseViewer or the JSON tree. The parent
+// receives the text ~SEARCH_DEBOUNCE_MS after typing pauses (onQueryChange)
+// and hands back `appliedQuery`, the text its match count belongs to; while
+// the two differ the count is stale, so the bar says "Searching…" instead
+// of showing it. It starts from `appliedQuery`, so the text survives the
+// bar unmounting (e.g. while the Headers tab is showing).
+function SearchBar({ inputRef, appliedQuery, matchTotal, currentMatch, onQueryChange, onNavigate, onClose }) {
+	const [query, setQuery] = useState(appliedQuery);
+	useEffect(() => {
+		const t = setTimeout(() => onQueryChange(query), SEARCH_DEBOUNCE_MS);
+		return () => clearTimeout(t);
+	}, [query, onQueryChange]);
+
+	const pending = normalizeQuery(query) !== normalizeQuery(appliedQuery);
+	const status = !normalizeQuery(query) ? ""
+		: pending ? "Searching…"
+		: matchTotal > 0 ? `${currentMatch + 1} of ${matchTotal}`
+		: "0 results";
+	const canNavigate = !pending && matchTotal > 0;
+
+	return (
+		<div className="response-search-bar">
+			<span className="response-search-icon">🔍</span>
+			<input
+				ref={inputRef}
+				className="response-search-input"
+				value={query}
+				onChange={e => setQuery(e.target.value)}
+				onKeyDown={e => {
+					if (e.key === "Enter") {
+						e.preventDefault();
+						// Enter before the debounce fires applies the query now
+						// (landing on its first match) instead of doing nothing.
+						if (pending) onQueryChange(query);
+						else if (canNavigate) onNavigate(e.shiftKey ? -1 : 1);
+					}
+					else if (e.key === "Escape") { e.preventDefault(); onClose(); }
+				}}
+				placeholder="Search this response…"
+			/>
+			<span className="response-search-count" aria-live="polite">{status}</span>
+			<button className="response-search-nav" onClick={() => onNavigate(-1)} disabled={!canNavigate} aria-label="Previous match" title="Previous match (Shift+Enter)">↑</button>
+			<button className="response-search-nav" onClick={() => onNavigate(1)} disabled={!canNavigate} aria-label="Next match" title="Next match (Enter)">↓</button>
+			<button className="response-search-nav" onClick={onClose} aria-label="Close search" title="Close (Esc)">✕</button>
+		</div>
+	);
+}
+
 const TABS = ["Pretty", "Raw", "Headers"];
 
 export function ResponseViewer({ response, sending, request, activeEnvironmentId, onGenerateSnippet, onClear }) {
 	const [activeTab, setActiveTab] = useState("Pretty");
 	const [showSnippet, setShowSnippet] = useState(false);
 	const [searchOpen, setSearchOpen] = useState(false);
-	const [searchQuery, setSearchQuery] = useState("");
 	const [debouncedQuery, setDebouncedQuery] = useState("");
 	const [currentMatch, setCurrentMatch] = useState(0);
 	const [viewTreeAnyway, setViewTreeAnyway] = useState(false);
@@ -101,18 +150,17 @@ export function ResponseViewer({ response, sending, request, activeEnvironmentId
 	const statusCls = response ? statusClass(response.status) : "serr";
 	// Parsed exactly once per response body (useMemo keyed on response.body),
 	// never re-parsed on unrelated re-renders (typing in the search box,
-	// toggling a tree node, etc.) — the tree, the search index, and the
-	// size-fallback check all read from this same parsed value.
-	const prettyBody = useCallback(() => (response?.body ? tryFormatJson(response.body) : ""), [response?.body]);
-	const headerEntries = response?.headers ? Object.entries(response.headers) : [];
-	// Only a JSON body gets the tree view; anything else (HTML, XML, plain
-	// text) keeps the existing flat <pre> — JsonView has nothing to render
-	// for a non-object/array payload anyway.
-	const parsedJson = useMemo(() => {
-		if (!response?.body || !isJson(response.body)) return undefined;
-		const value = JSON.parse(response.body);
-		return value !== null && typeof value === "object" ? value : undefined;
+	// toggling a tree node, etc.) — the tree, the search index, the pretty
+	// text, and the size-fallback check all read from this one parse.
+	const parsedBody = useMemo(() => {
+		if (!response?.body) return { ok: false };
+		try { return { ok: true, value: JSON.parse(response.body) }; } catch { return { ok: false }; }
 	}, [response?.body]);
+	const headerEntries = response?.headers ? Object.entries(response.headers) : [];
+	// Only a JSON object/array body gets the tree view; anything else (HTML,
+	// XML, plain text, a bare JSON scalar) keeps the existing flat <pre> —
+	// JsonView has nothing to render for a non-container payload anyway.
+	const parsedJson = parsedBody.ok && parsedBody.value !== null && typeof parsedBody.value === "object" ? parsedBody.value : undefined;
 
 	// Resets expansion to the smart defaults the instant parsedJson changes —
 	// done as a render-phase state adjustment (React's sanctioned pattern for
@@ -127,6 +175,13 @@ export function ResponseViewer({ response, sending, request, activeEnvironmentId
 
 	const isLargeResponse = (response?.size ?? 0) > LARGE_RESPONSE_BYTES;
 	const showJsonTree = parsedJson !== undefined && (!isLargeResponse || viewTreeAnyway);
+	// The flat pretty-printed text is only needed when the Pretty tab isn't
+	// showing the tree; built from the existing parse, once per response.
+	const needsPrettyText = activeTab === "Pretty" && !showJsonTree;
+	const prettyText = useMemo(() => {
+		if (!needsPrettyText) return "";
+		return parsedBody.ok ? JSON.stringify(parsedBody.value, null, 2) : (response?.body ?? "");
+	}, [needsPrettyText, parsedBody, response?.body]);
 
 	// New response → forget any earlier "view as tree anyway" override, and
 	// default straight to Raw for a large one so the user never has to wait
@@ -148,15 +203,11 @@ export function ResponseViewer({ response, sending, request, activeEnvironmentId
 	}, [parsedJson]);
 	const collapseAll = useCallback(() => setExpandedPaths(new Set()), []);
 
-	// The input box itself updates every keystroke (searchQuery, for a
-	// responsive feel); the expensive parts — walking the parsed JSON for
-	// matches, expanding paths, re-rendering highlighted marks — run against
-	// debouncedQuery instead, ~200ms after typing pauses, so a fast typist
-	// isn't fighting a tree walk on every character.
-	useEffect(() => {
-		const t = setTimeout(() => setDebouncedQuery(searchQuery), SEARCH_DEBOUNCE_MS);
-		return () => clearTimeout(t);
-	}, [searchQuery]);
+	// The search box's live text lives in SearchBar; everything here —
+	// walking the parsed JSON for matches, expanding paths, highlighting —
+	// runs against debouncedQuery, which SearchBar sets ~200ms after typing
+	// pauses, so a fast typist never re-renders this component or the tree.
+	const searchQuery = normalizeQuery(debouncedQuery);
 
 	// The actual match-finding, computed once per (parsed value, debounced
 	// query) pair — walks the parsed data, not the DOM, and not during
@@ -169,7 +220,7 @@ export function ResponseViewer({ response, sending, request, activeEnvironmentId
 		() => (parsedJson !== undefined ? findJsonMatches(parsedJson, debouncedQuery) : null),
 		[parsedJson, debouncedQuery]
 	);
-	const searchableText = activeTab === "Raw" ? response?.body : (showJsonTree ? null : prettyBody());
+	const searchableText = activeTab === "Raw" ? response?.body : (showJsonTree ? null : prettyText);
 	const textMatchCount = useMemo(
 		() => (searchableText != null ? countTextMatches(searchableText, debouncedQuery) : 0),
 		[searchableText, debouncedQuery]
@@ -213,32 +264,6 @@ export function ResponseViewer({ response, sending, request, activeEnvironmentId
 		if (searchOpen) marks[currentMatch]?.scrollIntoView({ block: "center" });
 	}, [currentMatch, searchOpen, matchTotal, usingJsonMatches]);
 
-	// Wraps every occurrence of the (debounced) search query inside `text` in
-	// a <mark>, case-insensitively. `rowPath`, when given, marks the wrapped
-	// occurrences as "current" whenever it's the JSON tree's current match's
-	// own row — the Raw tab has no row concept, so it's always undefined
-	// there and "current" styling instead comes from the DOM effect above.
-	// Intentionally pure — no counting or numbering happens in here; see
-	// jsonSearch.js and the effects above for where that actually happens.
-	const highlightText = useCallback((text, rowPath) => {
-		if (!debouncedQuery) return text;
-		const source = String(text);
-		const lower = source.toLowerCase();
-		const q = debouncedQuery.toLowerCase();
-		if (!lower.includes(q)) return source;
-		const isCurrentRow = rowPath != null && rowPath === currentJsonMatch?.path;
-		const parts = [];
-		let i = 0;
-		while (i < source.length) {
-			const idx = lower.indexOf(q, i);
-			if (idx === -1) { parts.push(source.slice(i)); break; }
-			if (idx > i) parts.push(source.slice(i, idx));
-			parts.push(<mark key={idx} className={`search-match${isCurrentRow ? " search-match-current" : ""}`}>{source.slice(idx, idx + debouncedQuery.length)}</mark>);
-			i = idx + debouncedQuery.length;
-		}
-		return parts;
-	}, [debouncedQuery, currentJsonMatch]);
-
 	// Plain client-side download — no dependency needed for a Blob + object
 	// URL + a programmatic <a download>.
 	function saveResponseAsFile() {
@@ -254,7 +279,7 @@ export function ResponseViewer({ response, sending, request, activeEnvironmentId
 		URL.revokeObjectURL(url);
 	}
 
-	const closeSearch = useCallback(() => { setSearchOpen(false); setSearchQuery(""); }, []);
+	const closeSearch = useCallback(() => { setSearchOpen(false); setDebouncedQuery(""); }, []);
 	const toggleSearch = useCallback(() => {
 		if (searchOpen) { closeSearch(); return; }
 		setSearchOpen(true);
@@ -397,24 +422,15 @@ export function ResponseViewer({ response, sending, request, activeEnvironmentId
 										))}
 									</div>
 									{searchOpen && activeTab !== "Headers" && (
-										<div className="response-search-bar">
-											<span className="response-search-icon">🔍</span>
-											<input
-												ref={searchInputRef}
-												className="response-search-input"
-												value={searchQuery}
-												onChange={e => setSearchQuery(e.target.value)}
-												onKeyDown={e => {
-													if (e.key === "Enter") { e.preventDefault(); goToMatch(e.shiftKey ? -1 : 1); }
-													else if (e.key === "Escape") { e.preventDefault(); closeSearch(); }
-												}}
-												placeholder="Search this response…"
-											/>
-											<span className="response-search-count">{matchTotal > 0 ? `${currentMatch + 1} of ${matchTotal}` : searchQuery ? "0 results" : ""}</span>
-											<button className="response-search-nav" onClick={() => goToMatch(-1)} disabled={matchTotal === 0} aria-label="Previous match" title="Previous match (Shift+Enter)">↑</button>
-											<button className="response-search-nav" onClick={() => goToMatch(1)} disabled={matchTotal === 0} aria-label="Next match" title="Next match (Enter)">↓</button>
-											<button className="response-search-nav" onClick={closeSearch} aria-label="Close search" title="Close (Esc)">✕</button>
-										</div>
+										<SearchBar
+											inputRef={searchInputRef}
+											appliedQuery={debouncedQuery}
+											matchTotal={matchTotal}
+											currentMatch={currentMatch}
+											onQueryChange={setDebouncedQuery}
+											onNavigate={goToMatch}
+											onClose={closeSearch}
+										/>
 									)}
 									{activeTab === "Pretty" && showJsonTree && (
 										<div className="json-toolbar">
@@ -425,7 +441,7 @@ export function ResponseViewer({ response, sending, request, activeEnvironmentId
 									<div className="response-body-wrap" role="tabpanel" ref={bodyWrapRef}>
 										{activeTab === "Pretty"  && (
 											parsedJson === undefined
-												? <pre className="response-body">{highlightText(prettyBody()) || <span style={{ color: "var(--text-tertiary)" }}>Empty response body</span>}</pre>
+												? <pre className="response-body">{highlightText(prettyText, searchQuery) || <span style={{ color: "var(--text-tertiary)" }}>Empty response body</span>}</pre>
 												: !showJsonTree
 													? <LargeResponseNotice sizeLabel={formatSize(response.size)} onViewAnyway={() => setViewTreeAnyway(true)} />
 													: (
@@ -434,15 +450,15 @@ export function ResponseViewer({ response, sending, request, activeEnvironmentId
 																value={parsedJson}
 																expandedPaths={expandedPaths}
 																onToggle={onToggleNode}
-																highlight={highlightText}
+																query={searchQuery}
+																activePath={currentJsonMatch?.path}
 																scrollContainerRef={bodyWrapRef}
-																scrollToPath={currentJsonMatch?.path}
 																scrollNonce={currentMatch}
 															/>
 														</div>
 													)
 										)}
-										{activeTab === "Raw"     && <pre className="response-body">{(response.body && highlightText(response.body)) || <span style={{ color: "var(--text-tertiary)" }}>Empty response body</span>}</pre>}
+										{activeTab === "Raw"     && <pre className="response-body">{(response.body && highlightText(response.body, searchQuery)) || <span style={{ color: "var(--text-tertiary)" }}>Empty response body</span>}</pre>}
 										{activeTab === "Headers" && (
 											<table className="headers-table">
 												<thead><tr><th>Header</th><th>Value</th></tr></thead>

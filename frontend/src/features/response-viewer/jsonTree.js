@@ -5,25 +5,47 @@
 // StrictMode's double-invoke (see transcripts/02-design-decisions.md).
 
 export const SMALL_RESPONSE_NODE_THRESHOLD = 500; // below this many total nodes, expand everything (like Postman)
-export const MAX_ENTRIES_AUTO_EXPANDED = 100; // a first-level container bigger than this starts collapsed anyway
+export const MAX_ENTRIES_AUTO_EXPANDED = 100; // below the root, a container bigger than this starts collapsed
 
-function containerEntries(value) {
-	const isArray = Array.isArray(value);
-	const entries = isArray ? value.map((v, i) => [String(i), v]) : Object.entries(value);
-	return { isArray, entries };
+// Keys of a container, without materializing [key, value] pairs — the
+// walks below run over every node of a large response, so they avoid the
+// per-container array copies `value.map(...)`/`Object.entries` would make.
+// Arrays use their numeric indices directly (see forEachChild).
+function isContainer(value) {
+	return value !== null && typeof value === "object";
 }
 
-// How many rows flattenTree would produce if *everything* were expanded —
-// the "is this response small or large" measure. A plain counting walk, no
-// row objects allocated, no DOM — cheap even for a huge response (see
-// transcripts/claude-session.md for the measured cost on the /photos shape).
-function countTotalNodes(value) {
-	if (value === null || typeof value !== "object") return 1;
-	const { entries } = containerEntries(value);
-	if (entries.length === 0) return 1;
-	let count = 1;
-	for (const [, v] of entries) count += countTotalNodes(v);
-	return count;
+function childCount(value) {
+	return Array.isArray(value) ? value.length : Object.keys(value).length;
+}
+
+// Calls fn(key, child, index, count) for each child in document order; `key`
+// is the path segment (the index as a string for arrays).
+function forEachChild(value, fn) {
+	if (Array.isArray(value)) {
+		for (let i = 0; i < value.length; i++) fn(String(i), value[i], i, value.length);
+		return;
+	}
+	const keys = Object.keys(value);
+	for (let i = 0; i < keys.length; i++) fn(keys[i], value[keys[i]], i, keys.length);
+}
+
+// "Does this response have at least `limit` nodes?" — the small-vs-large
+// test. Stops counting the moment it reaches `limit`, so a 5000-item
+// response costs ~`limit` steps here instead of a full walk of every node.
+function hasAtLeastNodes(root, limit) {
+	let count = 0;
+	function walk(value) {
+		if (++count >= limit) return true;
+		if (!isContainer(value)) return false;
+		if (Array.isArray(value)) {
+			for (let i = 0; i < value.length; i++) if (walk(value[i])) return true;
+			return false;
+		}
+		for (const key in value) if (Object.hasOwn(value, key) && walk(value[key])) return true;
+		return false;
+	}
+	return walk(root);
 }
 
 // Decides which containers start expanded for a brand new response — called
@@ -32,50 +54,49 @@ function countTotalNodes(value) {
 // *previous* response's expansion first). Rules, in order:
 //   1. The root always starts expanded, regardless of size — the user
 //      should never be dead-ended behind a single collapsed summary line.
-//   2. A genuinely small response (< SMALL_RESPONSE_NODE_THRESHOLD total
-//      nodes) starts fully expanded, matching Postman's own default.
-//   3. Otherwise ("large"): root plus, for an *object* root, each first-
-//      level property that is itself a container also starts expanded,
-//      unless that property is itself "big" (> MAX_ENTRIES_AUTO_EXPANDED
-//      entries), which stays collapsed. For an *array* root (e.g. the
-//      5000-item /photos shape), only the root itself expands — auto-
-//      expanding every individual item would mean "large" responses end up
-//      exactly as expanded as "small" ones by default, which defeats the
-//      distinction the size threshold exists to draw. Root being open is
-//      what actually matters: the user sees "[" immediately and can expand
-//      individual items from there, rather than starting behind one opaque
-//      "5000 items" line.
+//   2. Below the root, any container with more than
+//      MAX_ENTRIES_AUTO_EXPANDED entries starts collapsed, in any response.
+//   3. A small response (< SMALL_RESPONSE_NODE_THRESHOLD total nodes) starts
+//      otherwise fully expanded, matching Postman's own default.
+//   4. Otherwise ("large"): root plus, for an *object* root, each first-
+//      level property that is itself a (non-big) container. For an *array*
+//      root (e.g. the 5000-item /photos shape), only the root itself
+//      expands — auto-expanding every item would make "large" responses as
+//      expanded as small ones, defeating the size threshold. Root being open
+//      is what matters: the user sees "[" immediately and expands items from
+//      there rather than starting behind one opaque "5000 items" line.
 export function computeDefaultExpanded(root) {
-	if (root === null || typeof root !== "object") return new Set();
-	const { isArray, entries } = containerEntries(root);
-	if (entries.length === 0) return new Set();
+	if (!isContainer(root) || childCount(root) === 0) return new Set();
 
-	if (countTotalNodes(root) < SMALL_RESPONSE_NODE_THRESHOLD) return collectAllContainerPaths(root);
+	if (!hasAtLeastNodes(root, SMALL_RESPONSE_NODE_THRESHOLD)) {
+		return collectAllContainerPaths(root, { maxEntriesBelowRoot: MAX_ENTRIES_AUTO_EXPANDED });
+	}
 
 	const expanded = new Set(["$"]);
-	if (!isArray) {
-		for (const [key, val] of entries) {
-			if (val === null || typeof val !== "object") continue;
-			const { entries: childEntries } = containerEntries(val);
-			if (childEntries.length > 0 && childEntries.length <= MAX_ENTRIES_AUTO_EXPANDED) expanded.add(`$.${key}`);
-		}
+	if (!Array.isArray(root)) {
+		forEachChild(root, (key, val) => {
+			if (!isContainer(val)) return;
+			const n = childCount(val);
+			if (n > 0 && n <= MAX_ENTRIES_AUTO_EXPANDED) expanded.add(`$.${key}`);
+		});
 	}
 	return expanded;
 }
 
-// Every container path in the whole tree, regardless of size or depth — for
-// "Expand all." A plain walk, same cost class as computeDefaultExpanded;
-// only ever called from an explicit button click, never automatically.
-export function collectAllContainerPaths(root) {
+// Every container path in the tree — for "Expand all" (no limit), and for a
+// small response's default expansion (with `maxEntriesBelowRoot`, which
+// leaves big non-root containers — and so everything inside them —
+// collapsed). A plain walk; only ever run once per response or per click.
+export function collectAllContainerPaths(root, { maxEntriesBelowRoot = Infinity } = {}) {
 	const all = new Set();
-	function walk(value, path) {
-		if (value === null || typeof value !== "object") return;
-		const { entries } = containerEntries(value);
-		if (entries.length === 0) return;
+	function walk(value, path, isRoot) {
+		if (!isContainer(value)) return;
+		const n = childCount(value);
+		if (n === 0 || (!isRoot && n > maxEntriesBelowRoot)) return;
 		all.add(path);
-		for (const [key, val] of entries) walk(val, `${path}.${key}`);
+		forEachChild(value, (key, val) => walk(val, `${path}.${key}`, false));
 	}
-	walk(root, "$");
+	walk(root, "$", true);
 	return all;
 }
 
@@ -86,25 +107,23 @@ export function collectAllContainerPaths(root) {
 // to render that one line with no further tree lookups.
 export function flattenTree(root, expandedPaths) {
 	const rows = [];
-	function pushLeaf(value, path, depth, key, needsComma) {
-		rows.push({ type: "leaf", path, depth, key, value, needsComma });
-	}
 	function walk(value, path, depth, key, needsComma) {
-		if (value === null || typeof value !== "object") {
-			pushLeaf(value, path, depth, key, needsComma);
+		if (!isContainer(value)) {
+			rows.push({ type: "leaf", path, depth, key, value, needsComma });
 			return;
 		}
-		const { isArray, entries } = containerEntries(value);
-		if (entries.length === 0) {
+		const isArray = Array.isArray(value);
+		const n = childCount(value);
+		if (n === 0) {
 			rows.push({ type: "empty", path, depth, key, isArray, needsComma });
 			return;
 		}
 		if (!expandedPaths.has(path)) {
-			rows.push({ type: "collapsed", path, depth, key, isArray, entryCount: entries.length, needsComma });
+			rows.push({ type: "collapsed", path, depth, key, isArray, entryCount: n, needsComma });
 			return;
 		}
 		rows.push({ type: "open", path, depth, key, isArray });
-		entries.forEach(([k, v], i) => walk(v, `${path}.${k}`, depth + 1, isArray ? null : k, i < entries.length - 1));
+		forEachChild(value, (k, v, i, count) => walk(v, `${path}.${k}`, depth + 1, isArray ? null : k, i < count - 1));
 		rows.push({ type: "close", path, depth, isArray, needsComma });
 	}
 	walk(root, "$", 0, null, false);
