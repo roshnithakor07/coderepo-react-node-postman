@@ -17,7 +17,9 @@ function LargeResponseNotice({ sizeLabel, onViewAnyway }) {
 			<div className="response-empty-icon">⚠️</div>
 			<p>Large response ({sizeLabel}) — tree view may be slow</p>
 			<small>Raw view is shown by default for responses over 2 MB.</small>
-			<button type="button" className="btn-ghost" onClick={onViewAnyway}>View as tree anyway</button>
+			<button type="button" className="btn-ghost" onClick={onViewAnyway}>
+				View as tree anyway
+			</button>
 		</div>
 	);
 }
@@ -39,15 +41,23 @@ function SnippetPanel({ request, activeEnvironmentId, onGenerateSnippet }) {
 	// every change that should trigger a regeneration.
 	useEffect(() => {
 		const generation = ++generationRef.current;
-		if (!hasUrl) { setSnippet(""); setLoading(false); return; }
+		if (!hasUrl) {
+			setSnippet("");
+			setLoading(false);
+			return;
+		}
 		// Generation is normally near-instant; only flip on the loader if it's
 		// still running past this threshold, so a fast response never flashes it.
 		const loaderTimer = setTimeout(() => {
 			if (generationRef.current === generation) setLoading(true);
 		}, 150);
 		onGenerateSnippet(lang)
-			.then((r) => { if (generationRef.current === generation) setSnippet(r?.snippet || ""); })
-			.catch(() => { if (generationRef.current === generation) setSnippet("// Failed to generate snippet."); })
+			.then((r) => {
+				if (generationRef.current === generation) setSnippet(r?.snippet || "");
+			})
+			.catch(() => {
+				if (generationRef.current === generation) setSnippet("// Failed to generate snippet.");
+			})
 			.finally(() => {
 				clearTimeout(loaderTimer);
 				if (generationRef.current === generation) setLoading(false);
@@ -56,17 +66,27 @@ function SnippetPanel({ request, activeEnvironmentId, onGenerateSnippet }) {
 	}, [lang, request, activeEnvironmentId, hasUrl]);
 
 	async function copy() {
-		try { await navigator.clipboard.writeText(snippet); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch {}
+		try {
+			await navigator.clipboard.writeText(snippet);
+			setCopied(true);
+			setTimeout(() => setCopied(false), 2000);
+		} catch {}
 	}
 
 	return (
 		<div className="snippet-panel">
 			<div className="snippet-lang-row">
-				{["curl", "fetch", "axios", "python"].map(l => (
-					<button key={l} className={`snippet-lang-btn ${lang === l ? "active" : ""}`} onClick={() => setLang(l)}>{l}</button>
+				{["curl", "fetch", "axios", "python"].map((l) => (
+					<button key={l} className={`snippet-lang-btn ${lang === l ? "active" : ""}`} onClick={() => setLang(l)}>
+						{l}
+					</button>
 				))}
 			</div>
-			{loading && <div className="response-loading"><div className="spinner" /> Generating snippet…</div>}
+			{loading && (
+				<div className="response-loading">
+					<div className="spinner" /> Generating snippet…
+				</div>
+			)}
 			{!loading && snippet && (
 				<>
 					<pre className="snippet-code">{snippet}</pre>
@@ -77,9 +97,7 @@ function SnippetPanel({ request, activeEnvironmentId, onGenerateSnippet }) {
 					</div>
 				</>
 			)}
-			{!loading && !snippet && (
-				<p className="body-none-msg">Enter a request URL to generate a code snippet.</p>
-			)}
+			{!loading && !snippet && <p className="body-none-msg">Enter a request URL to generate a code snippet.</p>}
 		</div>
 	);
 }
@@ -99,10 +117,13 @@ function SearchBar({ inputRef, appliedQuery, matchTotal, currentMatch, onQueryCh
 	}, [query, onQueryChange]);
 
 	const pending = normalizeQuery(query) !== normalizeQuery(appliedQuery);
-	const status = !normalizeQuery(query) ? ""
-		: pending ? "Searching…"
-		: matchTotal > 0 ? `${currentMatch + 1} of ${matchTotal}`
-		: "0 results";
+	const status = !normalizeQuery(query)
+		? ""
+		: pending
+			? "Searching…"
+			: matchTotal > 0
+				? `${currentMatch + 1} of ${matchTotal}`
+				: "0 results";
 	const canNavigate = !pending && matchTotal > 0;
 
 	return (
@@ -112,23 +133,45 @@ function SearchBar({ inputRef, appliedQuery, matchTotal, currentMatch, onQueryCh
 				ref={inputRef}
 				className="response-search-input"
 				value={query}
-				onChange={e => setQuery(e.target.value)}
-				onKeyDown={e => {
+				onChange={(e) => setQuery(e.target.value)}
+				onKeyDown={(e) => {
 					if (e.key === "Enter") {
 						e.preventDefault();
 						// Enter before the debounce fires applies the query now
 						// (landing on its first match) instead of doing nothing.
 						if (pending) onQueryChange(query);
 						else if (canNavigate) onNavigate(e.shiftKey ? -1 : 1);
+					} else if (e.key === "Escape") {
+						e.preventDefault();
+						onClose();
 					}
-					else if (e.key === "Escape") { e.preventDefault(); onClose(); }
 				}}
 				placeholder="Search this response…"
 			/>
-			<span className="response-search-count" aria-live="polite">{status}</span>
-			<button className="response-search-nav" onClick={() => onNavigate(-1)} disabled={!canNavigate} aria-label="Previous match" title="Previous match (Shift+Enter)">↑</button>
-			<button className="response-search-nav" onClick={() => onNavigate(1)} disabled={!canNavigate} aria-label="Next match" title="Next match (Enter)">↓</button>
-			<button className="response-search-nav" onClick={onClose} aria-label="Close search" title="Close (Esc)">✕</button>
+			<span className="response-search-count" aria-live="polite">
+				{status}
+			</span>
+			<button
+				className="response-search-nav"
+				onClick={() => onNavigate(-1)}
+				disabled={!canNavigate}
+				aria-label="Previous match"
+				title="Previous match (Shift+Enter)"
+			>
+				↑
+			</button>
+			<button
+				className="response-search-nav"
+				onClick={() => onNavigate(1)}
+				disabled={!canNavigate}
+				aria-label="Next match"
+				title="Next match (Enter)"
+			>
+				↓
+			</button>
+			<button className="response-search-nav" onClick={onClose} aria-label="Close search" title="Close (Esc)">
+				✕
+			</button>
 		</div>
 	);
 }
@@ -154,7 +197,11 @@ export function ResponseViewer({ response, sending, request, activeEnvironmentId
 	// text, and the size-fallback check all read from this one parse.
 	const parsedBody = useMemo(() => {
 		if (!response?.body) return { ok: false };
-		try { return { ok: true, value: JSON.parse(response.body) }; } catch { return { ok: false }; }
+		try {
+			return { ok: true, value: JSON.parse(response.body) };
+		} catch {
+			return { ok: false };
+		}
 	}, [response?.body]);
 	const headerEntries = response?.headers ? Object.entries(response.headers) : [];
 	// Only a JSON object/array body gets the tree view; anything else (HTML,
@@ -192,7 +239,7 @@ export function ResponseViewer({ response, sending, request, activeEnvironmentId
 	}, [response]);
 
 	const onToggleNode = useCallback((path) => {
-		setExpandedPaths(prev => {
+		setExpandedPaths((prev) => {
 			const next = new Set(prev);
 			next.has(path) ? next.delete(path) : next.add(path);
 			return next;
@@ -218,21 +265,23 @@ export function ResponseViewer({ response, sending, request, activeEnvironmentId
 	// instant you scroll to it.
 	const jsonMatches = useMemo(
 		() => (parsedJson !== undefined ? findJsonMatches(parsedJson, debouncedQuery) : null),
-		[parsedJson, debouncedQuery]
+		[parsedJson, debouncedQuery],
 	);
-	const searchableText = activeTab === "Raw" ? response?.body : (showJsonTree ? null : prettyText);
+	const searchableText = activeTab === "Raw" ? response?.body : showJsonTree ? null : prettyText;
 	const textMatchCount = useMemo(
 		() => (searchableText != null ? countTextMatches(searchableText, debouncedQuery) : 0),
-		[searchableText, debouncedQuery]
+		[searchableText, debouncedQuery],
 	);
 	const usingJsonMatches = activeTab === "Pretty" && showJsonTree;
-	const matchTotal = usingJsonMatches ? jsonMatches?.count ?? 0 : textMatchCount;
+	const matchTotal = usingJsonMatches ? (jsonMatches?.count ?? 0) : textMatchCount;
 	const currentJsonMatch = usingJsonMatches ? jsonMatches?.matches[currentMatch] : undefined;
 
 	// Resets to the first match whenever the query or the searched view
 	// changes, rather than trying to preserve a position that may no longer
 	// exist.
-	useEffect(() => { setCurrentMatch(0); }, [debouncedQuery, activeTab, response]);
+	useEffect(() => {
+		setCurrentMatch(0);
+	}, [debouncedQuery, activeTab, response]);
 
 	// Jump-to-match for the JSON tree: expand exactly the current match's own
 	// ancestor chain (not every match's — see jsonSearch.js) so it becomes
@@ -241,11 +290,14 @@ export function ResponseViewer({ response, sending, request, activeEnvironmentId
 	// freshly-flattened rows.
 	useEffect(() => {
 		if (!currentJsonMatch) return;
-		setExpandedPaths(prev => {
+		setExpandedPaths((prev) => {
 			let changed = false;
 			const next = new Set(prev);
 			for (const p of currentJsonMatch.ancestorPaths) {
-				if (!next.has(p)) { next.add(p); changed = true; }
+				if (!next.has(p)) {
+					next.add(p);
+					changed = true;
+				}
 			}
 			return changed ? next : prev;
 		});
@@ -279,15 +331,24 @@ export function ResponseViewer({ response, sending, request, activeEnvironmentId
 		URL.revokeObjectURL(url);
 	}
 
-	const closeSearch = useCallback(() => { setSearchOpen(false); setDebouncedQuery(""); }, []);
+	const closeSearch = useCallback(() => {
+		setSearchOpen(false);
+		setDebouncedQuery("");
+	}, []);
 	const toggleSearch = useCallback(() => {
-		if (searchOpen) { closeSearch(); return; }
+		if (searchOpen) {
+			closeSearch();
+			return;
+		}
 		setSearchOpen(true);
 		requestAnimationFrame(() => searchInputRef.current?.focus());
 	}, [searchOpen, closeSearch]);
-	const goToMatch = useCallback((delta) => {
-		setCurrentMatch(m => nextMatchIndex(m, delta, matchTotal));
-	}, [matchTotal]);
+	const goToMatch = useCallback(
+		(delta) => {
+			setCurrentMatch((m) => nextMatchIndex(m, delta, matchTotal));
+		},
+		[matchTotal],
+	);
 
 	// Ctrl/Cmd+F opens the in-response search instead of the browser's own
 	// find bar — but only when there's a response to search and the user
@@ -297,7 +358,8 @@ export function ResponseViewer({ response, sending, request, activeEnvironmentId
 		function handler(e) {
 			if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
 				const active = document.activeElement;
-				const typingElsewhere = active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA") && !containerRef.current?.contains(active);
+				const typingElsewhere =
+					active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA") && !containerRef.current?.contains(active);
 				if (typingElsewhere || !response || response.error) return;
 				e.preventDefault();
 				setSearchOpen(true);
@@ -314,7 +376,7 @@ export function ResponseViewer({ response, sending, request, activeEnvironmentId
 	const SnippetToggle = (
 		<button
 			className={`icon-btn ${showSnippet ? "active" : ""}`}
-			onClick={() => setShowSnippet(s => !s)}
+			onClick={() => setShowSnippet((s) => !s)}
 			title="Code snippets"
 			style={{ width: "auto", padding: "0 10px", fontSize: 11, fontWeight: 700, gap: 4 }}
 		>
@@ -322,40 +384,50 @@ export function ResponseViewer({ response, sending, request, activeEnvironmentId
 		</button>
 	);
 
-	if (sending) return (
-		<div className="response-viewer">
-			<div className="response-bar"><span className="response-bar-title">Response</span></div>
-			<div className="response-loading"><div className="spinner" /> Sending request…</div>
-		</div>
-	);
-
-	if (!response) return (
-		<div className="response-viewer">
-			<div className="response-bar">
-				<span className="response-bar-title">Response</span>
-				<div style={{ marginLeft: "auto" }}>{SnippetToggle}</div>
+	if (sending)
+		return (
+			<div className="response-viewer">
+				<div className="response-bar">
+					<span className="response-bar-title">Response</span>
+				</div>
+				<div className="response-loading">
+					<div className="spinner" /> Sending request…
+				</div>
 			</div>
-			{showSnippet
-				? <SnippetPanel request={request} activeEnvironmentId={activeEnvironmentId} onGenerateSnippet={onGenerateSnippet} />
-				: (
+		);
+
+	if (!response)
+		return (
+			<div className="response-viewer">
+				<div className="response-bar">
+					<span className="response-bar-title">Response</span>
+					<div style={{ marginLeft: "auto" }}>{SnippetToggle}</div>
+				</div>
+				{showSnippet ? (
+					<SnippetPanel request={request} activeEnvironmentId={activeEnvironmentId} onGenerateSnippet={onGenerateSnippet} />
+				) : (
 					<div className="response-empty">
 						<div className="response-empty-icon">📡</div>
-						<p>Hit <strong>Send</strong> to see the response</p>
+						<p>
+							Hit <strong>Send</strong> to see the response
+						</p>
 						<small>Ctrl+Enter to send from the URL bar</small>
 					</div>
-				)
-			}
-		</div>
-	);
+				)}
+			</div>
+		);
 
 	return (
 		<div className="response-viewer" ref={containerRef}>
 			<div className="response-bar">
 				<span className="response-bar-title">Response</span>
-				{response.error
-					? <span className="status-badge serr">Error</span>
-					: <span className={`status-badge ${statusCls}`}>{response.status} {response.statusText}</span>
-				}
+				{response.error ? (
+					<span className="status-badge serr">Error</span>
+				) : (
+					<span className={`status-badge ${statusCls}`}>
+						{response.status} {response.statusText}
+					</span>
+				)}
 				<div className="response-meta">
 					{response.responseTime != null && (
 						<span className="meta-chip" title="Response time">
@@ -400,83 +472,118 @@ export function ResponseViewer({ response, sending, request, activeEnvironmentId
 				</div>
 			</div>
 
-			{showSnippet
-				? <SnippetPanel request={request} activeEnvironmentId={activeEnvironmentId} onGenerateSnippet={onGenerateSnippet} />
-				: (
-					<>
-						{response.error
-							? (
-								<div className="response-error">
-									<strong>Request failed</strong>
-									<span>{response.error}</span>
+			{showSnippet ? (
+				<SnippetPanel request={request} activeEnvironmentId={activeEnvironmentId} onGenerateSnippet={onGenerateSnippet} />
+			) : (
+				<>
+					{response.error ? (
+						<div className="response-error">
+							<strong>Request failed</strong>
+							<span>{response.error}</span>
+						</div>
+					) : (
+						<>
+							<div className="tabs" role="tablist">
+								{TABS.map((t) => (
+									<button
+										key={t}
+										role="tab"
+										className={`tab-btn ${activeTab === t ? "active" : ""}`}
+										aria-selected={activeTab === t}
+										onClick={() => setActiveTab(t)}
+									>
+										{t}
+										{t === "Headers" && headerEntries.length > 0 && (
+											<span className="tab-count">{headerEntries.length}</span>
+										)}
+									</button>
+								))}
+							</div>
+							{searchOpen && activeTab !== "Headers" && (
+								<SearchBar
+									inputRef={searchInputRef}
+									appliedQuery={debouncedQuery}
+									matchTotal={matchTotal}
+									currentMatch={currentMatch}
+									onQueryChange={setDebouncedQuery}
+									onNavigate={goToMatch}
+									onClose={closeSearch}
+								/>
+							)}
+							{activeTab === "Pretty" && showJsonTree && (
+								<div className="json-toolbar">
+									<button type="button" className="json-toolbar-btn" onClick={expandAll}>
+										Expand all
+									</button>
+									<button type="button" className="json-toolbar-btn" onClick={collapseAll}>
+										Collapse all
+									</button>
 								</div>
-							)
-							: (
-								<>
-									<div className="tabs" role="tablist">
-										{TABS.map(t => (
-											<button key={t} role="tab" className={`tab-btn ${activeTab === t ? "active" : ""}`} aria-selected={activeTab === t} onClick={() => setActiveTab(t)}>
-												{t}
-												{t === "Headers" && headerEntries.length > 0 && <span className="tab-count">{headerEntries.length}</span>}
-											</button>
-										))}
-									</div>
-									{searchOpen && activeTab !== "Headers" && (
-										<SearchBar
-											inputRef={searchInputRef}
-											appliedQuery={debouncedQuery}
-											matchTotal={matchTotal}
-											currentMatch={currentMatch}
-											onQueryChange={setDebouncedQuery}
-											onNavigate={goToMatch}
-											onClose={closeSearch}
+							)}
+							<div className="response-body-wrap" role="tabpanel" ref={bodyWrapRef}>
+								{activeTab === "Pretty" &&
+									(parsedJson === undefined ? (
+										<pre className="response-body">
+											{highlightText(prettyText, searchQuery) || (
+												<span style={{ color: "var(--text-tertiary)" }}>Empty response body</span>
+											)}
+										</pre>
+									) : !showJsonTree ? (
+										<LargeResponseNotice
+											sizeLabel={formatSize(response.size)}
+											onViewAnyway={() => setViewTreeAnyway(true)}
 										/>
-									)}
-									{activeTab === "Pretty" && showJsonTree && (
-										<div className="json-toolbar">
-											<button type="button" className="json-toolbar-btn" onClick={expandAll}>Expand all</button>
-											<button type="button" className="json-toolbar-btn" onClick={collapseAll}>Collapse all</button>
+									) : (
+										<div className="response-body response-body-json">
+											<JsonView
+												value={parsedJson}
+												expandedPaths={expandedPaths}
+												onToggle={onToggleNode}
+												query={searchQuery}
+												activePath={currentJsonMatch?.path}
+												scrollContainerRef={bodyWrapRef}
+												scrollNonce={currentMatch}
+											/>
 										</div>
-									)}
-									<div className="response-body-wrap" role="tabpanel" ref={bodyWrapRef}>
-										{activeTab === "Pretty"  && (
-											parsedJson === undefined
-												? <pre className="response-body">{highlightText(prettyText, searchQuery) || <span style={{ color: "var(--text-tertiary)" }}>Empty response body</span>}</pre>
-												: !showJsonTree
-													? <LargeResponseNotice sizeLabel={formatSize(response.size)} onViewAnyway={() => setViewTreeAnyway(true)} />
-													: (
-														<div className="response-body response-body-json">
-															<JsonView
-																value={parsedJson}
-																expandedPaths={expandedPaths}
-																onToggle={onToggleNode}
-																query={searchQuery}
-																activePath={currentJsonMatch?.path}
-																scrollContainerRef={bodyWrapRef}
-																scrollNonce={currentMatch}
-															/>
-														</div>
-													)
+									))}
+								{activeTab === "Raw" && (
+									<pre className="response-body">
+										{(response.body && highlightText(response.body, searchQuery)) || (
+											<span style={{ color: "var(--text-tertiary)" }}>Empty response body</span>
 										)}
-										{activeTab === "Raw"     && <pre className="response-body">{(response.body && highlightText(response.body, searchQuery)) || <span style={{ color: "var(--text-tertiary)" }}>Empty response body</span>}</pre>}
-										{activeTab === "Headers" && (
-											<table className="headers-table">
-												<thead><tr><th>Header</th><th>Value</th></tr></thead>
-												<tbody>
-													{headerEntries.length === 0
-														? <tr><td colSpan={2} style={{ color: "var(--text-tertiary)", textAlign: "center" }}>No response headers</td></tr>
-														: headerEntries.map(([k, v]) => <tr key={k}><td>{k}</td><td>{String(v)}</td></tr>)
-													}
-												</tbody>
-											</table>
-										)}
-									</div>
-								</>
-							)
-						}
-					</>
-				)
-			}
+									</pre>
+								)}
+								{activeTab === "Headers" && (
+									<table className="headers-table">
+										<thead>
+											<tr>
+												<th>Header</th>
+												<th>Value</th>
+											</tr>
+										</thead>
+										<tbody>
+											{headerEntries.length === 0 ? (
+												<tr>
+													<td colSpan={2} style={{ color: "var(--text-tertiary)", textAlign: "center" }}>
+														No response headers
+													</td>
+												</tr>
+											) : (
+												headerEntries.map(([k, v]) => (
+													<tr key={k}>
+														<td>{k}</td>
+														<td>{String(v)}</td>
+													</tr>
+												))
+											)}
+										</tbody>
+									</table>
+								)}
+							</div>
+						</>
+					)}
+				</>
+			)}
 		</div>
 	);
 }

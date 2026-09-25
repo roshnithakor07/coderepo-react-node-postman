@@ -39,8 +39,12 @@ export function ConfirmDialog({ title, message, confirmLabel, cancelLabel = "Can
 					<p>{message}</p>
 				</div>
 				<div className="modal-footer">
-					<button ref={cancelRef} className="btn-ghost" onClick={onCancel}>{cancelLabel}</button>
-					<button className="btn-danger" onClick={onConfirm}>{confirmLabel}</button>
+					<button ref={cancelRef} className="btn-ghost" onClick={onCancel}>
+						{cancelLabel}
+					</button>
+					<button className="btn-danger" onClick={onConfirm}>
+						{confirmLabel}
+					</button>
 				</div>
 			</div>
 		</div>

@@ -36,7 +36,9 @@ beforeAll(async () => {
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({ email: "test.user@example.com", password: "password123" }),
 	});
-	({ data: { token } } = await loginResponse.json());
+	({
+		data: { token },
+	} = await loginResponse.json());
 });
 
 afterAll(async () => {
@@ -74,7 +76,16 @@ describe("error handling (live HTTP)", () => {
 		const response = await authed("/proxy", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ method: "GET", url: "http://example.com", headers: [], params: [], body: "", bodyType: "none", auth: { type: "none" }, environmentId: "not-a-valid-id" }),
+			body: JSON.stringify({
+				method: "GET",
+				url: "http://example.com",
+				headers: [],
+				params: [],
+				body: "",
+				bodyType: "none",
+				auth: { type: "none" },
+				environmentId: "not-a-valid-id",
+			}),
 		});
 		const payload = await response.json();
 
@@ -144,7 +155,15 @@ describe("history list/detail scalability (live HTTP)", () => {
 		await authed("/proxy", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ method: "GET", url: `${baseUrl}/sandbox/get`, headers: [], params: [], body: "", bodyType: "none", auth: { type: "none" } }),
+			body: JSON.stringify({
+				method: "GET",
+				url: `${baseUrl}/sandbox/get`,
+				headers: [],
+				params: [],
+				body: "",
+				bodyType: "none",
+				auth: { type: "none" },
+			}),
 		});
 
 		const { data } = await (await authed("/history")).json();
@@ -175,7 +194,15 @@ describe("history list/detail scalability (live HTTP)", () => {
 			await authed("/proxy", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ method: "GET", url: `${baseUrl}/sandbox/status/20${i}`, headers: [], params: [], body: "", bodyType: "none", auth: { type: "none" } }),
+				body: JSON.stringify({
+					method: "GET",
+					url: `${baseUrl}/sandbox/status/20${i}`,
+					headers: [],
+					params: [],
+					body: "",
+					bodyType: "none",
+					auth: { type: "none" },
+				}),
 			});
 		}
 

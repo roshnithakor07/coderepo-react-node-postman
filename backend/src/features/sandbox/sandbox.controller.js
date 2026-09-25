@@ -17,7 +17,11 @@ export function echoGet(request, response) {
 export function echoWrite(request, response) {
 	const contentType = request.get("content-type") || "";
 	const isJson = contentType.includes("json");
-	response.json({ ...requestSnapshot(request), json: isJson ? request.body : null, data: isJson ? JSON.stringify(request.body) : request.body || "" });
+	response.json({
+		...requestSnapshot(request),
+		json: isJson ? request.body : null,
+		data: isJson ? JSON.stringify(request.body) : request.body || "",
+	});
 }
 
 export function echoDelete(request, response) {
@@ -26,7 +30,8 @@ export function echoDelete(request, response) {
 
 export function statusCode(request, response) {
 	const code = Number(request.params.code);
-	if (!Number.isInteger(code) || code < 100 || code > 599) return response.status(400).json({ error: "Status code must be between 100 and 599." });
+	if (!Number.isInteger(code) || code < 100 || code > 599)
+		return response.status(400).json({ error: "Status code must be between 100 and 599." });
 	response.status(code).json({ status: code });
 }
 

@@ -1,4 +1,10 @@
-import { substituteVariables, substituteAuth, buildAuthHeaders, buildAuthHeaderParam, buildAuthQueryParam } from "../../shared/utils/request-transform.js";
+import {
+	substituteVariables,
+	substituteAuth,
+	buildAuthHeaders,
+	buildAuthHeaderParam,
+	buildAuthQueryParam,
+} from "../../shared/utils/request-transform.js";
 
 function buildHeaders(requestData, resolvedAuth, envVars) {
 	const sub = (t) => substituteVariables(t, envVars);

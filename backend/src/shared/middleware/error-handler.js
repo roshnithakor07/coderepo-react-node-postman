@@ -7,7 +7,9 @@ export function notFoundHandler(request, response) {
 
 export function errorHandler(error, request, response, next) {
 	if (error instanceof ZodError) {
-		return response.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Request validation failed.", details: error.flatten() } });
+		return response
+			.status(400)
+			.json({ error: { code: "VALIDATION_ERROR", message: "Request validation failed.", details: error.flatten() } });
 	}
 	if (error instanceof AppError) {
 		return response.status(error.statusCode).json({ error: { code: error.code, message: error.message, details: error.details } });
@@ -16,7 +18,9 @@ export function errorHandler(error, request, response, next) {
 		return response.status(400).json({ error: { code: "INVALID_JSON", message: "Request body must be valid JSON." } });
 	}
 	if (error.name === "CastError" && error.kind === "ObjectId") {
-		return response.status(400).json({ error: { code: "INVALID_ID", message: `The provided ${error.path || "id"} is not a valid identifier.` } });
+		return response
+			.status(400)
+			.json({ error: { code: "INVALID_ID", message: `The provided ${error.path || "id"} is not a valid identifier.` } });
 	}
 	console.error(error);
 	return response.status(500).json({ error: { code: "INTERNAL_ERROR", message: "An unexpected error occurred." } });

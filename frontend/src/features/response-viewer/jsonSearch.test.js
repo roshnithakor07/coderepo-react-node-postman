@@ -58,7 +58,7 @@ describe("findJsonMatches", () => {
 	test("preserves document order across multiple matches", () => {
 		const data = ["ad-one", "nope", "ad-two", "ad-three"];
 		const { matches } = findJsonMatches(data, "ad");
-		expect(matches.map(m => m.path)).toEqual(["$.0", "$.2", "$.3"]);
+		expect(matches.map((m) => m.path)).toEqual(["$.0", "$.2", "$.3"]);
 	});
 });
 
@@ -71,14 +71,14 @@ describe("jump-to-match integration (findJsonMatches + flattenTree)", () => {
 
 		// Collapsed (nothing expanded): the match's row doesn't exist yet.
 		const collapsedRows = flattenTree(data, new Set());
-		expect(collapsedRows.find(r => r.path === match.path)).toBeUndefined();
+		expect(collapsedRows.find((r) => r.path === match.path)).toBeUndefined();
 
 		// Expand exactly the match's own ancestor chain (what ResponseViewer's
 		// jump-to-match effect does) and it becomes a real row, at a stable
 		// index — the "target row index" navigation actually scrolls to.
 		const expanded = new Set(match.ancestorPaths);
 		const rows = flattenTree(data, expanded);
-		const idx = rows.findIndex(r => r.path === match.path);
+		const idx = rows.findIndex((r) => r.path === match.path);
 		expect(idx).toBeGreaterThan(-1);
 		expect(rows[idx].value).toBe("needle-value");
 	});
@@ -99,7 +99,7 @@ describe("jump-to-match integration (findJsonMatches + flattenTree)", () => {
 		// than exploding toward items.length * fieldsPerItem (~10,000+).
 		expect(rows.length).toBeGreaterThanOrEqual(items.length);
 		expect(rows.length).toBeLessThan(items.length + 20);
-		expect(rows.find(r => r.path === match.path)?.value).toBe("findme");
+		expect(rows.find((r) => r.path === match.path)?.value).toBe("findme");
 	});
 });
 
@@ -118,7 +118,7 @@ describe("countTextMatches", () => {
 
 describe("rowMatchesQuery", () => {
 	const rows = flattenTree({ Title: "Accusamus beatae", id: 7, tags: ["x"], nested: { a: 1 } }, new Set(["$", "$.tags"]));
-	const byPath = (p, type) => rows.find(r => r.path === p && (!type || r.type === type));
+	const byPath = (p, type) => rows.find((r) => r.path === p && (!type || r.type === type));
 	test("matches a leaf by value, case-insensitively", () => {
 		expect(rowMatchesQuery(byPath("$.Title"), normalizeQuery("ACCUSAMUS"))).toBe(true);
 	});
@@ -135,8 +135,10 @@ describe("rowMatchesQuery", () => {
 	test("agrees with findJsonMatches on which rows match", () => {
 		const q = normalizeQuery(" a ");
 		const all = flattenTree({ Title: "Accusamus beatae", id: 7, tags: ["xa"], nested: { a: 1 } }, new Set(["$", "$.tags", "$.nested"]));
-		const matchingRowPaths = [...new Set(all.filter(r => rowMatchesQuery(r, q)).map(r => r.path))];
-		const matchPaths = [...new Set(findJsonMatches({ Title: "Accusamus beatae", id: 7, tags: ["xa"], nested: { a: 1 } }, q).matches.map(m => m.path))];
+		const matchingRowPaths = [...new Set(all.filter((r) => rowMatchesQuery(r, q)).map((r) => r.path))];
+		const matchPaths = [
+			...new Set(findJsonMatches({ Title: "Accusamus beatae", id: 7, tags: ["xa"], nested: { a: 1 } }, q).matches.map((m) => m.path)),
+		];
 		expect(matchingRowPaths).toEqual(matchPaths);
 	});
 });

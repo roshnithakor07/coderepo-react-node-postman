@@ -28,7 +28,8 @@ export const authService = {
 		} catch {
 			throw new AppError(401, "INVALID_TOKEN", "Your Postman session is invalid or has expired.");
 		}
-		if (!["workspace"].includes(payload.type)) throw new AppError(401, "INVALID_TOKEN", "Your Postman session is invalid or has expired.");
+		if (!["workspace"].includes(payload.type))
+			throw new AppError(401, "INVALID_TOKEN", "Your Postman session is invalid or has expired.");
 		const account = await authRepository.findActiveById(payload.sub);
 		if (!account) throw new AppError(401, "ACCOUNT_UNAVAILABLE", "This Postman workspace is no longer available.");
 		return { account, payload };
