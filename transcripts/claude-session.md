@@ -3812,3 +3812,40 @@ The user approved round 5. Before merging they asked for the 45 test history ent
 - **Reviewer path:** `hackerrank.yml` runs `bun start`, whose `prestart` runs `setup.sh --start`, which always calls `bun run seed`. `backend/src/scripts/seed.js` runs `deleteMany({})` on every collection (history included) and re-seeds the documented baseline (6 history entries for Alex Rivera). A reviewer therefore always starts from the clean seed, regardless of what is in this dev database. Locally, `bun run seed` (or `bash setup.sh --seed`) resets to the same state, but it also resets collections and environments.
 
 Merged with `git merge --no-ff feature/response-viewer-polish` into `main` (merge commit `1162158`; `main` was at `3795c01`, the merge base, so no conflicts). The merged `main` passes `bun run build` and `bun test`. Pushed `main`; deleted `feature/response-viewer-polish` locally and on `origin`.
+
+---
+
+## 2026-09-25 — main — History rewrite: removed "Co-Authored-By: Claude" trailers
+
+**Task:** Remove only the `Co-Authored-By: Claude <...>` trailer lines from every commit message, trimming any blank lines left at the end of a message. Nothing else may change: file content, authors, committers, dates and all other message text stay exactly as they were. Back up first, verify, force-push with a lease, disable future trailers, and keep the backup until the user confirms GitHub looks right.
+
+**Scope found:** Only `main` exists, locally and on `origin`, with no tags or stashes. It has 59 commits, all authored and committed by the user. Exactly 5 carry a trailer (`Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`), all from this session's commits. No commit is GPG-signed, so the rewrite drops no signatures.
+
+**How:**
+1. Backup: `git branch backup/before-rewrite main` (`5f86d29`), pushed to `origin`.
+2. `git filter-repo` is not installed, so the rewrite used `git filter-branch --msg-filter` (allowed as the fallback). filter-branch keeps each commit's original author, committer and dates, and does not remove the `origin` remote, so nothing had to be re-added. The filter (`strip_trailer.py`, scratchpad) drops lines matching `^co-authored-by:\s*claude…<…>$` (case-insensitive), trims only the blank lines this leaves at the end of the message, and passes every other message through byte-for-byte. A dry run over all 59 messages first confirmed exactly 5 changed, each losing only the blank line and the trailer line.
+3. A pre-existing `refs/original/refs/heads/main` (`4d96977`, from an earlier rewrite on 2026-09-20) was found. It was left untouched: this rewrite wrote its own backup to `--original refs/original-trailer-rewrite` instead of overwriting it with `-f`. Only `main` was rewritten, so `backup/before-rewrite` still points at the original history.
+
+**Verification (rewritten `main` against `backup/before-rewrite`):**
+- Commit count: 59 / 59.
+- `git diff backup/before-rewrite main`: empty (0 bytes), so the code is identical.
+- `git log --format='%an <%ae>' | sort -u`: only `Roshni Thakor <thakorroshni104@gmail.com>` (committers the same).
+- `git log | grep -i co-authored-by`: no output.
+- Per commit, all 59: tree, author name/email/date, committer name/email/date and parent count identical.
+- Message diff between the two histories: exactly 5 `Co-Authored-By: Claude Opus 5.5 …` lines and 5 trailing blank lines removed, nothing else.
+
+**Push:** `git push --force-with-lease=main:5f86d29 origin main` (lease pinned to the old remote tip): `5f86d29...41246b7 (forced update)`.
+
+**Commit hashes changed.** The 54 commits before the first trailer kept their hashes. The 5 rewritten commits got new ones (and so does anything built on them). Earlier entries in this transcript and in `02-design-decisions.md` still cite the old hashes, which remain reachable through `backup/before-rewrite` until it is deleted. Mapping:
+
+| Old | New | Subject |
+|---|---|---|
+| `fd65801` | `0f4b405` | docs: record browser click-through results for response-viewer and history work |
+| `d34c808` | `844b3ed` | fix/perf: memoize JSON rows and move search input out of the tree |
+| `40b8e8c` | `24fd569` | docs: record JSON viewer perf cause, fix, and interleaved before/after timing |
+| `1162158` | `65adb89` | Merge branch 'feature/response-viewer-polish' |
+| `5f86d29` | `41246b7` | docs: mark response viewer polish as merged; record history cleanup findings |
+
+**Future trailers disabled:** local `.claude/settings.json` (gitignored, not committed) sets `"attribution": {"commit": "", "pr": "", "sessionUrl": false}`, the current setting, plus `"includeCoAuthoredBy": false` for older Claude Code versions. A persistent agent memory also records that Co-Authored-By lines must never be added in this repo.
+
+**Status:** Rewrite pushed. `backup/before-rewrite` is kept locally and on `origin` until the user confirms GitHub looks right, then it will be deleted (together with the local `refs/original-trailer-rewrite` backup ref).
