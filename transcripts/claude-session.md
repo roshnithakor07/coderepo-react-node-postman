@@ -3510,6 +3510,8 @@ parent_agent=none
 
 ## 2026-09-24T13:01:33+00:00 — feature/response-viewer-polish — Response Viewer polish
 
+**Status:** Merged — approved 2026-09-25, merged into `main` with `--no-ff` (merge commit `1162158`); branch deleted locally and on `origin`.
+
 **Task:** JSON syntax highlighting using existing color tokens, collapsible objects/arrays, Ctrl+F search within response with match count, and Save response as .json file.
 
 **Files changed:**
@@ -3798,4 +3800,15 @@ Console: zero errors or warnings across both runs. Observation (not a bug): page
 - **Production:** at normal CPU every phase sits at the 17–33 ms frame floor, before and after. The drop in "network response → rows visible" from 532 to 127 ms at normal CPU reverses at 4× (490→561), so I'm not claiming it.
 - Functional acceptance (20/20, dev server, scratchpad `acceptance.cjs`): `/todos/1`, `POST /photos` and `/users` fully expanded as before; `/photos` rendered 402–443 ms after the network response, root open and items collapsed; "accusamus" → `Searching…` → `1 of 126`, first match expanded into view and highlighted; ↑ wraps 1→126 and ↓ wraps 126→1; Enter during the debounce applies immediately; "0 results" only for real no-match queries; Headers→Raw keeps the query (bar hidden on Headers); Expand all → 35,002 rows with 39 in the DOM; Collapse all → `[5000 items]`; keyboard toggle, Save and the Headers tab work; zero console errors or warnings. (One failure in the first run was a test-selector bug that matched the *request* builder's Headers tab. The pre-fix build behaved identically, and the fixed selector passes.)
 
-**Status:** Awaiting approval.
+**Status:** Merged — approved by the user, merged into `main` (merge commit `1162158`), branch deleted locally and remotely.
+
+---
+
+### Update — approved and merged
+
+The user approved round 5. Before merging they asked for the 45 test history entries added to `alex.rivera@postman.dev` to be removed (keeping the original 15), or for an explanation of how a reviewer gets a clean seeded database. Findings (from paging the live `GET /history` and matching timestamps against this session's log):
+- Neither the 45 `GET /todos/N` test entries nor the original 15 still exist. The whole history was cleared between 2026-09-24 15:18 and 15:26 UTC (after the click-through, before the perf measurements). The 6 seeded entries are gone too. No logged action in this session clears history (the scripts never click "Clear history" or call a delete endpoint, and no reseed ran).
+- 103 entries remain: 100 match URLs these test scripts use (`GET /photos`, `/todos/1`, `/users`, `POST /photos`), and 3 (`/sandbox/posts`, `/sandbox/put`) do not. Nothing was deleted, because a few `/photos` entries around the user's own sandbox activity couldn't be attributed with certainty.
+- **Reviewer path:** `hackerrank.yml` runs `bun start`, whose `prestart` runs `setup.sh --start`, which always calls `bun run seed`. `backend/src/scripts/seed.js` runs `deleteMany({})` on every collection (history included) and re-seeds the documented baseline (6 history entries for Alex Rivera). A reviewer therefore always starts from the clean seed, regardless of what is in this dev database. Locally, `bun run seed` (or `bash setup.sh --seed`) resets to the same state, but it also resets collections and environments.
+
+Merged with `git merge --no-ff feature/response-viewer-polish` into `main` (merge commit `1162158`; `main` was at `3795c01`, the merge base, so no conflicts). The merged `main` passes `bun run build` and `bun test`. Pushed `main`; deleted `feature/response-viewer-polish` locally and on `origin`.
