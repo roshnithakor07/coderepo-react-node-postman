@@ -3849,3 +3849,17 @@ Merged with `git merge --no-ff feature/response-viewer-polish` into `main` (merg
 **Future trailers disabled:** local `.claude/settings.json` (gitignored, not committed) sets `"attribution": {"commit": "", "pr": "", "sessionUrl": false}`, the current setting, plus `"includeCoAuthoredBy": false` for older Claude Code versions. A persistent agent memory also records that Co-Authored-By lines must never be added in this repo.
 
 **Status:** Rewrite pushed. `backup/before-rewrite` is kept locally and on `origin` until the user confirms GitHub looks right, then it will be deleted (together with the local `refs/original-trailer-rewrite` backup ref).
+
+---
+
+## 2026-09-25 — fix/lint-cleanup — External lint pass and Prettier formatting
+
+**Status:** Merged — approved 2026-09-25, merged into `main` with `--no-ff` (merge commit `73595bd`); branch deleted locally and on `origin`.
+
+**Task:** Originally "add ESLint (flat config, React + Hooks) with a `lint` script" on `feature/add-eslint`. Paused before any manifest change because GUIDELINES.md §5.3 explicitly says the repo must not add ESLint, and the §2.2 dependency freeze and the validator's S06 check forbid new dev dependencies. The user chose to lint once from outside the repo instead, renamed the branch to `fix/lint-cleanup`, and asked for a Prettier pass.
+
+**What was done** (full reasoning in `02-design-decisions.md` → "Linting"):
+- `b8cd96f`: an external ESLint 9.39.5 run (51 findings) led to three trivial, behavior-neutral fixes: the unused `sidebarCollapsed` and `activeEnvId` props on `AppHeader`, and a stale `eslint-disable` comment in `JsonView`. Everything else was left with documented reasons: Express's required four-parameter `next`, operator logs, intentional empty catches, JSON quote characters, and two deliberate `exhaustive-deps` cases. No hook dependency was changed.
+- `fb367f1` "style: apply Prettier formatting to source": the repo's `.prettierrc` applied with Prettier 3.9.9 (run externally, not pinned) to all 30 `frontend/src`/`backend/src` files and `README.md`. The compiled output was confirmed equivalent (frontend bundle diff limited to a JSX `{" "}` and CSS value spacing; backend files identical after minification). HackerRank-provided files, `.vscode/` and `transcripts/` were untouched. No `prettier` dependency or format script was added.
+- `4a7a465`: `.git-blame-ignore-revs` lists `fb367f1`, so blame lines attributed to the formatting commit drop from 3,597 to 115.
+- Verified: build, 51/51 tests, `git diff --check`, and a browser click-test of 10/10 (send, JSON tree, search navigation, history reload, save to collection, save response, no console errors). Test data created by the click-test was deleted.

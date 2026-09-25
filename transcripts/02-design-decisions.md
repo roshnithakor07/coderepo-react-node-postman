@@ -125,6 +125,9 @@ Branch `feature/response-viewer-polish` added four things to the Pretty tab: JSO
 
 ## Linting: ESLint not added; code linted once externally (branch `fix/lint-cleanup`)
 
+**Status:** Merged — approved 2026-09-25, merged into `main` with `--no-ff` (merge commit `73595bd`); branch deleted locally and on `origin`.
+
+
 - **ESLint is not part of the repo, per GUIDELINES.md §5.3** ("JavaScript uses the existing Prettier configuration without adding ESLint, Husky, or lint-staged") and the §2.2 dependency freeze. The validator's S06 dependency check would also flag the new dev dependencies. A request to add ESLint with a `lint` script was paused on that conflict, and the user chose instead to run it once from outside the repo. No manifest, lockfile or config file in the repo changed.
 - **How it was run:** ESLint 9.39.5 with a flat config, installed in a throwaway directory outside the repo (`@eslint/js`, `eslint-plugin-react` 7.37.5, `eslint-plugin-react-hooks` 7.1.1 with the two core rules `rules-of-hooks` and `exhaustive-deps`, `globals`). It ran with `--no-config-lookup --config <external path>` over `frontend/src` and `backend/src`, with `no-console` enabled to surface every log call for review.
 - **Fixed (trivial, no behavior change):** `AppHeader` declared a `sidebarCollapsed` prop it never read, and `App.jsx` also passed an `activeEnvId` prop the header never read (it looks up the active environment itself); both were removed. A leftover `// eslint-disable-next-line react-hooks/exhaustive-deps` in `JsonView.jsx` suppressed nothing (the effect's dependencies are complete) and was removed.
