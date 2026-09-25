@@ -198,7 +198,6 @@ export const JsonView = memo(function JsonView({ value, expandedPaths, onToggle,
 		const targetTop = rootOffsetWithinContainer(container, root) + idx * ROW_HEIGHT;
 		const center = targetTop - container.clientHeight / 2 + ROW_HEIGHT / 2;
 		container.scrollTo({ top: Math.max(0, center) });
-		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [activePath, scrollNonce, flatRows, scrollContainerRef]);
 
 	const visible = flatRows.slice(range.start, range.end);

@@ -345,8 +345,6 @@ export function PostmanWorkspace({ account, onLogout }) {
 			<AppHeader
 				account={account}
 				environments={environments}
-				activeEnvId={environments.find((e) => e.isActive)?._id}
-				sidebarCollapsed={sidebarCollapsed}
 				onToggleSidebar={() => setSidebarCollapsed((s) => !s)}
 				onEnvChange={handleEnvChange}
 				onOpenEnvs={() => setShowEnvs(true)}

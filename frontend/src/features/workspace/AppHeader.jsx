@@ -8,7 +8,7 @@ function BrandIcon() {
 	);
 }
 
-export function AppHeader({ account, environments, sidebarCollapsed, onToggleSidebar, onEnvChange, onOpenEnvs, onLogout }) {
+export function AppHeader({ account, environments, onToggleSidebar, onEnvChange, onOpenEnvs, onLogout }) {
 	const activeEnv = environments.find(e => e.isActive);
 	const initials = account?.name?.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase() || "?";
 
