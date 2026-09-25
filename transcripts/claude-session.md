@@ -3507,3 +3507,295 @@ branch=main
 repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
 worktree=main
 parent_agent=none
+
+## 2026-09-24T13:01:33+00:00 — feature/response-viewer-polish — Response Viewer polish
+
+**Task:** JSON syntax highlighting using existing color tokens, collapsible objects/arrays, Ctrl+F search within response with match count, and Save response as .json file.
+
+**Files changed:**
+- `frontend/src/features/response-viewer/JsonView.jsx` (new) — self-written recursive JSON tree: syntax highlighting + collapsible objects/arrays, accepts an optional `highlight(text)` render-prop and a `forceExpanded` override.
+- `frontend/src/features/response-viewer/ResponseViewer.jsx` — wires `JsonView` into the Pretty tab (falls back to the original flat `<pre>` for non-JSON bodies via the existing `isJson()` helper); adds Ctrl+F-triggered in-response search (match count, prev/next, Escape/close) and a "save response as .json" download button.
+- `frontend/src/styles.css` — new rules for `.json-*` (tree/highlighting), `.response-search-*` (search bar), `mark.search-match`/`.search-match-current`, and `.icon-btn:disabled` (was previously undefined). No new hex values — every color reuses an existing `:root` token.
+
+**Why (key decisions):**
+- JSON key/string/number/boolean/null colors map onto existing tokens (`--info`/`--success`/`--warning`/`--patch`/`--text-tertiary`) rather than new ones — see `transcripts/02-design-decisions.md` for the exact mapping and reasoning.
+- Search counts matches by reading the committed DOM (`querySelectorAll("mark.search-match")`) in a `useEffect`, not by mutating a ref during render — the first version double-counted under React 18 StrictMode's intentional double-invoke of render functions (12 reported vs. 6 actually shown). Documented in the design-decisions log as a real bug found and fixed during this task, not a hypothetical.
+- Search force-expands collapsed JSON nodes while active (`forceExpanded` prop) so a match inside a collapsed branch is still findable; the user's own collapse choices are restored once the search bar closes.
+- No dependency was added — both the JSON tree and the search/highlight logic are hand-written, per the ground rules.
+
+**How to test:**
+1. Log in (`alex.rivera@postman.dev` / `password123`), send a request against the local sandbox that returns JSON, e.g. `POST http://localhost:8000/api/v1/sandbox/post` with a JSON body containing a string, a number, a boolean, and `null`.
+2. On the Pretty tab, confirm each value type is a different color and punctuation is muted.
+3. Click the caret/count on an object or array to collapse it to `{…N keys}` / `[…N items]`; click again to re-expand.
+4. Press Ctrl+F (or click the 🔍 icon in the response bar) — a search bar appears, focused. Type a term that exists inside a currently-collapsed node; confirm it's still found and the node auto-expands while searching.
+5. Press Enter/Shift+Enter to move next/prev; confirm the "X of Y" count and the highlighted-current match are correct. Press Escape or ✕ to close — confirm the node you collapsed in step 3 is collapsed again.
+6. Click the ⭳ (save) icon; confirm a `.json` file downloads containing the response body. Trigger an error response (e.g. an unreachable host) and confirm both the search and save icons disappear.
+7. Regression: Raw and Headers tabs still render correctly; Clear Response still works; Snippets panel still works; Save-to-collection modal, Collections tab, History tab, and the Environments modal all still open/work; sidebar default width is still 290px.
+
+**Known issues / follow-ups:**
+- Search is scoped to the Pretty and Raw tabs only; the Headers tab (a table, not text) is intentionally not searched — flagged as a scoping choice, not an oversight.
+- No lint script exists in this project (confirmed via `package.json`); "lint clean" was satisfied by `bun run build`'s own compile step plus manual review, since there's nothing to run.
+
+---
+
+### Update — performance fix (`fix/perf` commit `b9cd603`)
+
+Not approved: the UI froze on large responses (e.g. `GET https://jsonplaceholder.typicode.com/photos`, 5000 items / ~1.1 MB).
+
+**Cause, measured before touching any code:**
+- Pure backend proxy round-trip (network fetch + re-stringify, no frontend involved) for the `/photos` response: **~2.0s**, measured with a direct `curl` to `/api/v1/proxy`.
+- The same request through the UI, timed from click to the status badge becoming visible: **~19.5s**.
+- The ~17.5s gap was the frontend, not the network. `JsonView`'s `collapsed` state started as an empty `Set` — nothing collapsed by default — so the very first render of a 5000-item array synchronously created and committed **~55,000 DOM nodes** in one blocking React render pass (confirmed by counting rendered leaf/node elements once it finally painted). The status badge, part of the same commit, couldn't paint until that whole synchronous tree finished.
+- A second, related freeze was found and fixed *during* this task, not anticipated up front: the first version of "auto-expand paths containing a search match" extended an array's visible *window* up to the highest matching index. Searching "accusamus" against `/photos` matches indices 0 through 4991 — extending the window to cover index 4991 meant rendering practically the entire 5000-item array again, and search took **14.9s**.
+
+**Fix (all in `JsonView.jsx` / new `jsonSearch.js` / `ResponseViewer.jsx`):**
+- Smart default expansion: a container auto-expands only at depth 0–1, and *any* container (regardless of depth) with more than ~100 entries starts collapsed. A collapsed node's children are never rendered — not CSS-hidden, simply absent from the returned tree — so cost scales with what's visible, not with response size.
+- Chunking: an expanded array renders a 100-item window plus "Show 100 more" / "Show all (N)" controls, rather than every item at once.
+- Search now runs against the *parsed* JSON value via a pure, `useMemo`-computed `findJsonMatches()` in the new `jsonSearch.js` (not the DOM, not a ref mutated during render — kept correct under StrictMode per the existing design-decisions note), the query is debounced 200ms, and — the fix for the second freeze — a match's array ancestor is revealed by adding *only that specific index* to what's shown (union of the normal chunk window + the sparse matched indices), never by widening the window to reach it. A small "⋯ N items skipped" separator marks the gap. An `EXPAND_CAP` (300) bounds how many matches get auto-revealed on an even broader query, without capping the reported total count's accuracy.
+- Size fallback: a response over 2 MB (`response.size`) defaults to the Raw tab and shows a "Large response — tree view may be slow" notice with a "View as tree anyway" button in place of the tree on the Pretty tab; opting in is still instant because the same collapsed-by-default rule applies.
+- `parsedJson` was already `useMemo`-keyed on `response.body` before this fix (parsed once per response, not per render) — confirmed unchanged, no redundant parse was introduced.
+
+**Before / after (all measured with Playwright against the real `/photos` endpoint, not simulated):**
+
+| Scenario | Before | After |
+|---|---|---|
+| Click Send → status badge visible | ~19.5s | ~3.1–4.0s (now ≈ the ~2s backend/network round-trip; root array renders as a single collapsed `5000 items` node) |
+| Expand root array | froze with the rest | ~650–700ms to reveal 601 rows (first 100 items + their fields) |
+| Collapse root again | froze with the rest | ~130–180ms |
+| Search "accusamus" (126 matches, spread 0–4991) | 14.9s | ~550–750ms (incl. the 200ms debounce), max single keystroke 182ms while typing |
+| Small response (existing sandbox echo) | N/A | Unchanged — fully auto-expanded, identical to the pre-perf-fix behavior, since nothing here exceeds the depth/count thresholds |
+
+**Acceptance test — all four re-verified after the fix, via Playwright against the live app:**
+1. `/photos` renders (root visible, collapsed) in ~3–4s total including ~2s of real network/backend time; scrolling is smooth (nothing large is mounted until expanded). ✓
+2. Expand/collapse the root repeatedly — no freeze (sub-second each time). ✓
+3. Search "accusamus" — count ("1 of 126") appears in under a second; typing stays smooth (max 182ms per keystroke, well under a perceptible stutter). ✓
+4. Small responses (the existing sandbox echo requests used throughout this session) — fully auto-expanded exactly as before this fix, all commands/regressions (Send, Save, Collections, History, Environments, Snippets, Raw, Headers, Clear Response, sidebar 290px) re-verified passing with zero console errors.
+
+Also re-verified the >2MB size fallback directly (via a mocked 2.7 MB and 60 MB-equivalent-item-count response, since the real `/photos` endpoint is ~1.1 MB and doesn't reach the threshold): Raw becomes the default tab, the Pretty tab shows the large-response notice instead of the tree, and "View as tree anyway" opts in instantly (~86ms) because the oversized root array still starts collapsed by the same default rule.
+
+`bun test` (21/21 pass), `cd frontend && bun run build` (succeeded), `git diff --check` (clean) all re-run and passing after this fix.
+
+**Status:** Awaiting approval (again).
+
+---
+
+### Update — virtualization rewrite (commits `ac06c7d`, `3780a6d`)
+
+Not approved: two freezes remained on `/photos` even after the chunking fix — (1) clicking "Show all (5000)" froze the UI, (2) reverse search (↑ / Shift+Enter, especially wrapping from the first match to the last) froze.
+
+**Cause of both, measured before rewriting:**
+- "Show all" set the array's chunk window to 5000, which is exactly the same class of problem chunking was supposed to prevent — it just moved the threshold for triggering a giant synchronous render from "on load" to "on this one button."
+- Reverse-search-wraps-to-last hit the *other* leftover chunking mechanism: revealing a match required widening the array's visible window up to that match's index, and the very last match of a query is (by definition) near the end of the array — wrapping to it forced nearly full-array rendering again.
+- Both are the same root problem: chunking still couples "how much is revealed" to "how much gets rendered." Fixing it needed removing that coupling entirely, not tuning the chunk size.
+
+**Fix — replaced chunking with virtualization** (new `jsonTree.js`, rewritten `JsonView.jsx`, `jsonSearch.js`, `ResponseViewer.jsx`):
+- `jsonTree.js#flattenTree()` turns the parsed value + a `Set` of expanded paths into a flat, ordered array of one-row-per-line objects — pure, `useMemo`-computed, and still short-circuits on a collapsed container exactly like before (so flattening cost scales with what's *expanded*, not total response size — flattening all ~35,000 rows of a fully-expanded `/photos` is a plain JS walk with no DOM involved, measured at well under 50ms).
+- `JsonView.jsx` renders only the rows inside the current scroll viewport + a 12-row overscan, via a fixed `ROW_HEIGHT` (20px) and a translated absolute-positioned window inside a full-height spacer — the *existing* `.response-body-wrap` scroll container drives it (via a `scrollContainerRef` passed down), not a second nested scrollable area. This is what actually fixes both freezes: DOM node count is now bounded by viewport height, never by how much is logically expanded or how far into the array a match sits.
+- Expand/collapse state (`expandedPaths`) moved from JsonView-local to controlled-by-`ResponseViewer`, because both the new Expand-all/Collapse-all toolbar and search's jump-to-match need to drive it from outside the tree. `jsonTree.js#collectAllContainerPaths()` (a one-time full-tree walk, only run on the explicit "Expand all" click, never automatically) backs the toolbar.
+- `jsonSearch.js#findJsonMatches()` now returns an ordered array of `{path, ancestorPaths}` instead of the old "which paths to force-expand / how far to widen each array" model. Jumping to a match expands *only that match's own* ancestor chain (a handful of paths, not the whole array) — this is what makes reverse-wrap instant regardless of the match's index, and it also meant the earlier round's `EXPAND_CAP` safety net could be deleted entirely: there was never anything left to need capping once "reveal everything at once" was removed as a concept. Match granularity also changed deliberately: one match is now one leaf/key whose value contains the query (not one per substring occurrence within it) — with jump-to-match navigation, "one match = one row to visit" is the useful unit; multiple occurrences inside the same row are all visible together the instant you scroll to it.
+- Chunking's "Show 100 more" / "Show all (N)" UI was removed entirely, replaced by the Expand-all/Collapse-all toolbar — with true virtualization, an expanded array of any size costs the same to render as a small one (only the viewport mounts), so partial reveal no longer serves a performance purpose, and always showing the full array once expanded is a better, more predictable UX than an artificial per-click reveal.
+- Long values ellipsize (`white-space: nowrap; overflow: hidden; text-overflow: ellipsis` on each fixed-height row) with the full value as a native `title` tooltip, per the two allowed options.
+- Self-written throughout, no library — a fixed-row-height virtual list is a well-understood, small technique, and every row here already is a fixed-height text line, which is exactly the case hand-rolling suits.
+
+**A real bug found and fixed *during* this rewrite:** the first version keyed each rendered row by `row.path` alone. An expanded container contributes two rows — an "open" line and a "close" line — that legitimately share the same `path`, which produced React "duplicate key" warnings for every expanded container and, more importantly, visibly incorrect row content during scroll (React reusing/misapplying a DOM node between the colliding keys) — confirmed by literally seeing `"Collapse all"` leave 10 stale rows on screen instead of the correct 1 until this was fixed. Fixed by keying on `${row.path}:${row.type}` instead, which is unique for every row by construction.
+
+**The 386ms-vs-3–4s gap, investigated as asked — the cause was not parse or flatten:**
+- Measured directly in-browser: `JSON.parse` of the actual ~1.05 MB `/photos` payload took **~2.7ms**; the one-time `computeDefaultExpanded()` walk over its ~5001 containers took **~1.4ms**. Neither is a meaningful contributor.
+- Instrumented the real network request instead (via Playwright's request/response timing on `/api/v1/proxy`): a consistent **~150–950ms gap** remained between "network response received" and "status badge visible" — squarely in frontend responsibility.
+- Found it: `App.jsx`'s `handleSend()` does `await loadHistory()` between `setResponse(result)` and the `finally { setSending(false) }` that clears the loading state — so the response stays hidden behind the loading spinner until the *History* list also finishes refetching. Checked what that refetch actually costs right now: `GET /api/v1/history` for this account currently returns **26 MB** (this session's own accumulated test history, including full bodies from every earlier `/photos` request), and parsing/transferring that dwarfs the actual ~1 MB proxy response it's nominally waiting alongside.
+- Fixed with the smallest possible change (`App.jsx`, 1 line): `loadHistory()` is no longer awaited — it already has its own internal `try`/`catch`, so this can't produce an unhandled rejection, and firing it without blocking means the History sidebar still updates, just without holding the response viewer hostage to it. This is a pre-existing characteristic of the send flow, unrelated to anything else in this branch, but it was "in our code" and directly responsible for the reported gap, so fixed per the instruction to fix it if that's where the time was going.
+- This account's 26 MB history is itself a pre-existing side effect of this session's own repeated large-response testing, not a new problem introduced here — flagged for awareness, not touched further (out of scope for this branch, which is about the response *viewer*, not the history *storage model*).
+
+**Before / after (measured against the live `/photos` endpoint, several runs each to account for real network variance to the external test API):**
+
+| Scenario | Before this round | After |
+|---|---|---|
+| Click Send → status badge visible | ~3–4s (mostly ~2s real network + ~0.15–1.5s frontend gap) | ~1.2–3.7s (now almost entirely real network latency to jsonplaceholder.typicode.com, which itself varied 0.85–2.4s across runs; frontend-processing gap down to ~150–200ms typically) |
+| Click "Show all (5000)" | Froze | N/A — removed; "Expand all" (equivalent, now safe) takes ~450ms with zero freeze |
+| Expand all (5000 items → ~35,000 rows) | froze (old chunking didn't cover this action) | ~450–470ms, smooth |
+| Collapse all | froze | ~245–250ms, smooth |
+| Reverse search wrap (match 1 → last of 416, "ad") | froze | ~310ms |
+| Holding/rapid Enter through 15 matches | untested previously | ~900ms total (~60ms/match), no freeze |
+| Scrolling 20,000px / 500,000px into an expanded tree | N/A (old design couldn't reach this state safely) | 39–44 DOM rows mounted regardless of scroll depth |
+
+**Acceptance test — all five re-verified via Playwright against the live app:**
+1. `/photos` renders fast (root visible, collapsed, ~1 row) and scrolling stays smooth (bounded DOM at any scroll depth). ✓
+2. Expand all → ~450ms, smooth; Collapse all → ~245ms, smooth. ✓
+3. Search "ad" (416 matches) — ↑ from match 1 wraps to match 416 in ~310ms; 15 rapid Enters cycle in ~900ms with no freeze. ✓
+4. Keyboard focus (native `<button>` Enter/Space activation on toggles, confirmed), text selection/copy (no crash, normal browser behavior on real DOM text), search highlighting (color-correct `<mark>`), Raw/Headers/Save-as-file — all still work. ✓
+5. Small responses (the existing sandbox echo requests) — fully auto-expanded, identically colored, identical row count/behavior to before this round; full regression pass (Send, Save-to-collection, Collections, History, Environments, Snippets, Clear Response, sidebar 290px) re-verified passing with zero console errors (including the duplicate-key warnings, now gone). ✓
+
+`bun test` (21/21), `cd frontend && bun run build`, and `git diff --check` all re-run and passing.
+
+**Status:** Awaiting approval (again).
+
+---
+
+### Update — default-expansion fix, search-navigation fix, and a history-API proposal (commit `21d1413`)
+
+Not approved: three issues reported. (1) small responses started collapsed at the root instead of Postman-style fully expanded. (2) search ↑/↓/Enter/Shift+Enter didn't actually jump to matches. (3) `/api/v1/history` returning 26 MB is a scalability bug, not just the latency issue fixed last round.
+
+**Issue 1 — default expansion.** Rewrote `jsonTree.js#computeDefaultExpanded()` to the exact specified rule: the root always starts expanded regardless of size; a response with fewer than 500 total nodes (a new `countTotalNodes()` helper, cheap — same cost class as the existing container-walks) starts **fully** expanded via `collectAllContainerPaths()`; a larger response expands the root plus, for an object root, each first-level property that's itself a container and not individually "big" (> 100 entries). For a large *array* root (e.g. `/photos`), only the root expands — its 5000 items each stay collapsed by default, deliberately: auto-expanding every item would make "large" responses exactly as expanded as "small" ones, erasing the distinction the size threshold exists to draw. Verified live: root now always renders as `▶[` or `▶{` (an open row), never a collapsed `{N keys}` summary line, for both the small sandbox-echo test case and `/photos`.
+
+**Issue 2 — search navigation was actually broken, and the cause was a real bug, not a misunderstanding of the spec.** `JsonView.jsx`'s scroll-to-match math used `root.offsetTop` — which is relative to `root`'s nearest *positioned* ancestor (its `offsetParent`), not necessarily the scroll container. `.response-body-wrap` (the actual scroll container) has no `position` set, so `offsetTop` was silently measuring against the wrong reference frame, and `container.scrollTo({ top: ... })` was scrolling to a nonsensical position — the counter updated correctly (pure state, unaffected) but the viewport visibly didn't move, exactly matching the reported symptom. Fixed by replacing every `offsetTop` reference with a new `rootOffsetWithinContainer()` helper that computes the same offset from `getBoundingClientRect()` differences between the container and the tree root instead — pure viewport geometry, correct regardless of any ancestor's CSS `position`. Verified live: clicking Next now visibly scrolls the container (`scrollTop` measurably changes, e.g. 0 → 495px) and the current match's `<mark>` is confirmed to sit within the visible viewport bounds afterward — including the specific previously-broken case, reverse-wrap from match 1 to match 416 of a 416-match `/photos` search (`~380ms`, scroll moves 0 → 99,695px, current mark visible). Forward-wrap (last → first) also re-verified. The "current match" highlight was already using a stronger, solid-color style (`rgb(251,191,36)`) versus regular matches' 10%-opacity tint (`rgba(251,191,36,0.1)`) from the previous round — confirmed still correctly distinct. Matches in both object keys and values were confirmed navigable and highlighted (a `casey`-keyed field's key and its `casey-value` string value both produced marks).
+
+Also extracted the next/prev-with-wrap index math into a standalone pure function, `jsonSearch.js#nextMatchIndex(current, delta, total)` (previously inlined in `ResponseViewer.jsx`), and added `frontend/src/features/response-viewer/jsonSearch.test.js` — 16 tests using Bun's built-in test runner (`bun:test`, already used by the backend, no new dependency): forward/backward/wrap/single-match/zero-match cases for `nextMatchIndex`; key-vs-value matching, ancestor-chain correctness, and document-order for `findJsonMatches`; and two integration tests proving (a) a match inside a fully collapsed structure is unreachable via `flattenTree` until its exact ancestor chain is expanded, and becomes locatable at a stable row index once it is, and (b) expanding one match's ancestors inside a 2000-item array does **not** also expand the other 1999 items' fields (rows stay close to `items.length`, not `items.length × fieldsPerItem`) — this is the property that makes wrap-around to a match anywhere in a huge array cheap. Confirmed `bun test`, run bare (not via the root `package.json`'s backend-only `test` script) from either the repo root or `frontend/`, already auto-discovers this new file alongside the existing backend tests with zero configuration changes — 37 tests across 4 files total now.
+
+**Issue 3 — history payload size. Investigated and designed; NOT implemented, per the explicit instruction to propose backend/API-shape changes first.** Current state: `GET /api/v1/history` (`history.repository.js#findAllByAccount`) returns up to 100 full documents per account — every field, including `requestBody`/`responseBody`/`requestHeaders`/`responseHeaders` — which is where the measured 26 MB comes from (this session's own accumulated large-response testing). The MongoDB index the task asked for, `{accountId: 1, createdAt: -1}`, **already exists** (`history.model.js`) — no change needed there. One existing-behavior finding worth flagging: `App.jsx#handleSelectHistory` currently only reads `entry.method/url/requestHeaders/requestBody` to reload a request into the builder — it never displays the historical *response* at all (`setResponse(null)`). This matters because the requested summary fields (id, method, url, status, time, size, createdAt) don't include `requestHeaders`/`requestBody`, so slimming the list endpoint down to that shape would break "click a history item to reload it" unless `handleSelectHistory` is changed to fetch the full entry first — exactly what the new detail endpoint is for. Full proposed design, including the exact API-shape changes, is below and was not applied to any file.
+
+**Proposed design (pending approval):**
+1. `history.model.js`: add `requestBodyTruncated`/`responseBodyTruncated: { type: Boolean, default: false }`. No index change (already present).
+2. `history.repository.js#findAllByAccount`: add `.select("method url status responseTime responseSize createdAt")` (summary projection) and real pagination — proposing simple offset (`skip`/`limit`, default `limit=50`) over a cursor, since this app's actual history scale doesn't warrant cursor complexity; flagged as a deliberate simplicity-over-robustness tradeoff for the user to accept or override.
+3. New `history.repository.js#findByIdFull` (the existing unused `findById` already returns the full document — would just be wired up) + new `history.service.js#getById` (404 `AppError` if missing/not owned, mirroring the existing `remove`) + new `history.controller.js#getHistoryEntry` + new route `GET /api/v1/history/:id`.
+4. `historyService.record()` (called from `proxy.service.js`, 3 call sites): before saving, if `responseBody` (or `requestBody`) exceeds ~1 MB, truncate it and set the corresponding `*Truncated` flag instead of storing the full body.
+5. **API-shape change, called out explicitly per the instruction:** `GET /api/v1/history`'s response envelope would change from `{data: HistoryEntry[]}` to `{data: {items: HistoryEntry[], hasMore: boolean}}` — `historyApi.list()`'s return value changes shape, and `App.jsx#loadHistory`/`Sidebar.jsx` would need updating to match (track `hasMore`, append on "Load more" rather than replace).
+6. `App.jsx#handleSelectHistory` becomes `async`, calling a new `historyApi.getById(entry._id)` before populating the builder, since the list no longer carries `requestHeaders`/`requestBody`.
+7. Truncation-note UI: since the app currently never displays a history entry's *response* at all (see finding above), there's no existing screen to show "response body was too large to store" on. Proposing to surface it only in the (new) detail payload's `responseBodyTruncated` flag for now, with no new UI surface added — flagged as a scope question: build a small UI affordance for it now, or leave it data-only until/unless historical-response viewing becomes a feature.
+
+Existing history features this preserves: reload-into-builder, clear history, delete one entry, auto-logging on every send (all untouched in shape, only the *list* response and the *record* body-size get modified).
+
+Documented as a proposal (this section) and in `transcripts/02-design-decisions.md`; not implemented. Regression-retested the full previous acceptance list (`/photos` load ~3.8s, Expand all ~880ms, Collapse all ~325ms, all smooth, zero console errors) to confirm issues 1–2's fixes introduced no regressions.
+
+`bun test` (37/37 across 4 files), `cd frontend && bun run build`, `git diff --check` all passing.
+
+**Status:** Issues 1–2 awaiting approval; issue 3 awaiting a decision on the proposed API shape before implementation begins.
+
+---
+
+### Update — history API implemented: cursor pagination, detail endpoint, body truncation (commit `1e91159`)
+
+User confirmed the proposal with two changes to it: cursor pagination on `(createdAt, _id)` instead of offset (`_id` as tie-breaker, since two entries can share the same `createdAt` millisecond), and — separately — asked whether response bodies could be dropped from history storage entirely, since no UI currently displays a historical response. Checked before implementing, per the task's own instruction: `REQUIREMENTS.md` line 18 states the History feature must "Record every sent request **with its response**," and `backend/src/features/proxy/proxy.service.test.js` has a passing assertion (`lastEchoedUrl()`) that parses `entry.responseBody` to verify URL fidelity — an existing test that storing no response body at all would break. Reported this back and fell to the user's own stated fallback: kept response bodies, capped at 1 MB with a truncation flag, no new UI (both exactly as the user pre-agreed for this case).
+
+**What changed:**
+- `history.model.js`: added `requestBodyTruncated`/`responseBodyTruncated` (Boolean, default false); replaced the `{accountId, createdAt}` index with a compound `{accountId: 1, createdAt: -1, _id: -1}` — `_id` joins the index itself so the cursor query's `$or` filter and sort both stay a single index scan, not an index scan plus in-memory sort.
+- `history.repository.js`: new `findSummaryPage(accountId, {limit, cursor})` — `.select()`s only the six summary fields, filters with `{$or: [{createdAt: {$lt: cursor.createdAt}}, {createdAt: cursor.createdAt, _id: {$lt: cursor.id}}]}` when a cursor is given, sorts `{createdAt: -1, _id: -1}`, fetches `limit + 1` rows so "is there another page" is a length check with no second query. `findById` (already existed, previously unused) is now wired to the new detail endpoint.
+- `history.service.js`: `list()` decodes an opaque base64 cursor (`{createdAt, id}`) and returns `{items, nextCursor}` (`null` on the last page); `getById()` (404 if missing/not owned, matching the existing `remove()` pattern); `record()` now truncates `requestBody`/`responseBody` past 1 MB before saving and sets the corresponding flag — `responseSize` is deliberately left reflecting the *real, untruncated* size so the list view's size column stays accurate even for a truncated entry.
+- `history.controller.js` / `history.routes.js`: `listHistory` now reads `limit`/`cursor` query params (`limit` clamped 1–100, default 50); new `GET /history/:id` → `getHistoryEntry`.
+- `history.api.js`: `list({cursor})` returns `{items, nextCursor}`; new `getById(id)`.
+- `App.jsx`: `handleSelectHistory` is now `async`, calling `historyApi.getById()` for the full entry before populating the builder (list entries no longer carry `requestHeaders`/`requestBody`); new `historyCursor`/`historyLoadingMore` state and `loadMoreHistory()`; `loadHistory()` (mount + post-send refresh) always replaces from page one, discarding any appended pages — the first page is the source of truth for "most recent."
+- `Sidebar.jsx`: new "Load more" button, shown only when a cursor is pending, disabled with a "Loading…" label mid-fetch.
+- `styles.css`: `.history-load-more-btn` — reuses `--primary`/`--primary-dim` (an action, not navigation, so `--primary` not `--brand`, consistent with the app's existing brand/primary split) with hover/focus-visible/disabled states, no new tokens.
+
+**Tests added** (`backend/src/app.test.js`, live HTTP against a real disposable MongoDB + the real Express app, extending the existing pattern in that file): list endpoint never returns request/response bodies or headers; `GET /history/:id` returns the full entry including the response body the list omits; cursor pagination across two pages is gapless, repeat-free, and newest-first (the automated test only drains two pages, so it doesn't itself assert `nextCursor: null` at the end — that was confirmed separately via manual `curl`, see below). A separate direct-service-call test (`historyService.record()`, no HTTP) confirms a >1 MB response body is truncated to exactly 1 MB with the flag set and `responseSize` still reporting the real size, and that a small body is stored whole with the flag unset. `bun test`: 41/41 (added 5).
+
+**Verified live** against the running dev servers (backend on :8000) via authenticated `curl` as the seeded `alex.rivera@postman.dev` account — no browser/Playwright tool is available in this session, so this round's UI click-through (Sidebar's History tab, "Load more", re-opening a history entry into the builder) was **not** re-verified visually; noting this as a real gap rather than claiming it: `bun run build` and the full `bun test` suite (which does exercise the actual HTTP handlers end to end) both pass, but nobody has looked at the rendered page this round. Backend-level evidence:
+- `GET /history` (1 entry in the account at the time): **231 bytes** — versus the 26 MB the same style of call returned before this task's Part 3 began. `curl` to the real endpoint, not an estimate.
+- `GET /history?limit=2`, then `GET /history?limit=2&cursor=<nextCursor>`: page 1 returned the 2 newest entries, page 2 the next 2, in strictly newest-first order, no overlap between the two pages' ids — confirmed by directly diffing the two id lists.
+- `GET /history/:id`: returned the full document (`requestBody`, `responseHeaders`, `responseBody`, the new truncation flags, etc.) for an id taken from a summary list response.
+
+**One pre-existing issue found, not fixed (out of scope for this task):** the raw MongoDB document for a history entry with no custom request headers is missing the `requestHeaders` field entirely (confirmed via a direct query against the `histories` collection, bypassing the API) — `responseHeaders` (always non-empty, since the sandbox/target always sends some headers back) is present as expected, but `requestHeaders: {}` (empty at creation) doesn't get persisted, seemingly a Mongoose `Mixed`-type quirk with empty-object values at document-creation time. This predates this task's changes (the model's field declarations for `requestHeaders`/`responseHeaders` are identical and neither was touched here beyond adding the two new boolean fields), doesn't affect anything asked for in this round (the frontend already defensively does `entry.requestHeaders || {}`), and touching `proxy.service.js`'s request-building code is outside this task's stated file scope — flagging it here rather than fixing it or staying silent about it.
+
+`bun test` (41/41), `cd frontend && bun run build`, `git diff --check` all passing.
+
+**Status:** Awaiting approval (again) — all three issues from this round now addressed, pending your click-through since I have no browser tool available in this session to do it myself.
+
+---
+
+### Update — browser click-through of the full acceptance list (no code changes)
+
+A Playwright browser was available this round, so the UI click-through the previous update couldn't do has now been done. The Playwright MCP server was configured for Google Chrome, which isn't installed, so the same checks ran as a headless `playwright-core` script against the bundled Chromium 1243. It drove the real dev servers (:3000/:8000) as `alex.rivera@postman.dev` against the real `jsonplaceholder.typicode.com`. The scripts stayed in the session scratchpad and are not committed. To exercise pagination, 45 extra `GET /todos/N` requests went through `/api/v1/proxy`, taking the account from 15 history entries to 60.
+
+| # | Item | Result | Evidence |
+|---|---|---|---|
+| 1 | Default expansion | PASS | `/todos/1`: 6 rows, 0 collapsed. `POST /photos`: `{ "id": 5001 }` fully expanded. `/users` (10 nested objects, under 500 nodes): 0 collapsed. `/photos`: root `[` open, items `{5 keys}` collapsed; Send → rendered in 1.47s. |
+| 2 | Search ↑/↓ + wrap | PASS | `/photos` "ad": 1 of 416 → ↑ → **416 of 416** (165ms) → ↓ → 1 of 416 → ↓ → 2 of 416; Shift+Enter back to 1; 30× Enter → 31 of 416 (no drops, ~72ms/step including Playwright overhead). `/users` "an": 1↔26 wrap both ways; 30× Enter lands on 5 of 26 (31 mod 26). The active match is always inside the viewport and vertically centred (offset 0px), except matches near the top, where scrollTop clamps at 0. Active match background `rgb(251,191,36)` vs `rgba(251,191,36,0.1)` for the others. |
+| 3 | Expand/Collapse all on `/photos` | PASS | Expand all 209ms (spacer 100k → 700k px, still 39 DOM rows); a 20-step scroll to the bottom took 779ms total, still only 27 DOM rows at `"id": 4997`. Collapse all 139ms → 1 row `[5000 items]`. |
+| 4 | History payload size (Network) | PASS | `GET /api/v1/history` responses: 1.9–2.9 KB at 15 entries, **9.8 KB** for a full 50-item page, 1.9 KB for the 10-item second page (vs 26 MB before). Detail `GET /history/:id` 1.7 KB. |
+| 5 | Cursor pagination | PASS | 50 items + "Load more" → click → 60 items, button hidden (`nextCursor: null`). Page-1/page-2 `_id` overlap: 0; all 60 newest-first; list items carry only `_id, method, url, status, responseTime, responseSize, createdAt`. After a new Send, the list resets to page one (50 + Load more), as designed. |
+| 6 | History click reloads request | PASS | Scribbled the URL bar, clicked a `POST /photos` entry (including one from page 2) → `GET /history/:id` fired, URL bar and method restored to `POST https://jsonplaceholder.typicode.com/photos`. |
+
+Console: zero errors or warnings across both runs. Observation (not a bug): page one of history is fetched twice on mount in dev. That's `<StrictMode>` double-invoking effects in `main.jsx`, and it doesn't happen in production builds.
+
+**Status:** Awaiting approval — every acceptance item verified in a real browser, and none needed a code change.
+
+---
+
+### Update — large-response perf, round 5: measured cause, then fixes 1–4 (no chunking)
+
+**Request.** The UI freezes on large responses (`/photos`). Measure first and report the cause before fixing. A re-sent older prompt also asked for "Show 100 more / Show all" chunking. I flagged that this conflicts with the round-2 decision (chunking was what caused the Show-all and reverse-search freezes, and virtualization replaced it). The user confirmed the prompt was re-sent by mistake: keep virtualization, don't re-add chunking, go ahead with fixes 1–4. Branch check: `feature/response-viewer-polish` is not merged into `origin/main` (not an ancestor, no PR), so the work stays on this branch.
+
+**How it was measured.** The Playwright MCP server wants Google Chrome, which isn't installed, so everything ran as headless `playwright-core` scripts (scratchpad only, not committed) against the bundled Chromium. Instruments: a `longtask` PerformanceObserver; a requestAnimationFrame frame-gap probe (worst frame per phase); CDP CPU profiles (`Profiler.start/stop`, aggregated by self time); and CDP `Emulation.setCPUThrottlingRate` for the 4× runs. Production numbers come from a `vite build` served by `vite preview`, built into the scratchpad (the repo's `dist/` untouched). The phases were Send → tree, Expand all, Collapse all, a 60-frame scroll while expanded, typing "accusamus" at 60 ms/key, ↑ wrap, and 20× Enter.
+
+**Cause found.**
+1. Parse, flatten, tree walks and search were each only 2–21 ms in the profile. The dominant cost during scrolling and typing was `jsxDEV` self time, meaning React elements being created: 530 ms over the 60-frame scroll, 118 ms while typing. `JsonRow` wasn't memoized, and its `highlight` prop was a callback recreated whenever the query or current match changed. So every scroll step rebuilt every row in the window, not just the rows scrolling in. Every keystroke re-rendered `ResponseViewer`, `JsonView` and every visible row, even though the search itself was debounced. React 19's development build makes each element far more expensive (about 9× more long-task time in dev than prod for the same scroll), which is why `bun run dev` felt frozen while the production build mostly didn't.
+2. The body was parsed twice per response: `isJson()` parsed it, then `parsedJson` parsed it again. `prettyBody()` re-ran `JSON.parse` + `JSON.stringify` on every render wherever it was used.
+3. `computeDefaultExpanded` counted all ~25,000 nodes just to decide small vs large (threshold 500). Every walk copied each container into an entries array, and `findJsonMatches` copied the ancestor list at every container.
+4. Separate bug: during the 200 ms debounce the counter showed **"0 results"** ("accusamus" really has 126).
+
+**Fix** (`frontend/src/features/response-viewer/`):
+- **Fix 1 (re-renders):** `JsonRow` is `memo`'d with stable props: `row` (the flattened row object, whose identity is stable until `flatRows` recomputes), `matchQuery` (the normalized query, but only for rows that actually match via the new pure `rowMatchesQuery`, otherwise `""`), `isActive`, and the stable `onToggle`. A new query re-renders only matching rows, moving between matches re-renders only the old and new current rows, and scrolling only mounts the rows entering the window. `JsonView` is `memo`'d too. The search box's live text moved out of `ResponseViewer` into a new `SearchBar` component that owns the input state and the debounce, so a keystroke re-renders only the bar. The acceptance script checks this directly: 0 DOM mutations inside the tree while typing. Highlighting is now one pure helper (`highlight.jsx`) shared by the tree and the Raw view.
+- **Fix 2:** `SearchBar` compares its live text with the query the parent applied. While they differ it shows **"Searching…"**, then the real count. "accusamus" → `Searching…` → `1 of 126`. Enter pressed during the debounce applies the query immediately instead of doing nothing.
+- **Fix 3:** the body is parsed once (`parsedBody`), and the pretty text is a `useMemo` built from that parse, only when needed. The small/large test stops counting at 500 nodes (`hasAtLeastNodes`). The walks iterate children in place (`forEachChild`) instead of copying entries arrays. `findJsonMatches` keeps one shared ancestor stack and copies it only when a match is recorded (126 copies instead of about 5,000). Measured on the real `/photos` data (Bun): collect-all-paths 4.7 ms, **flatten all 35,002 rows 14 ms** (worst 20 ms), default expansion 0.1 ms (was ~1.4 ms), "accusamus" search 6 ms. Flattening is far below the 200 ms line the user set, so no lazy flattening was added.
+- **Fix 4:** below the root, any container with more than 100 entries starts collapsed in every response, including "small" ones. The root is always open, and the other default-expansion rules are unchanged.
+- Tests: 10 new in `jsonSearch.test.js` covering `rowMatchesQuery` (including agreement with `findJsonMatches`) and the default-expansion rules. Frontend viewer suite 26/26; `bun test` from the repo root 51/51 across 4 files; `bun run build` and `git diff --check` clean.
+
+**Before/after timing.** The first before/after comparison, run in separate batches minutes apart, disagreed with itself: some production 4× rows looked *worse* after. That's machine noise on a shared WSL host, so no conclusion was drawn from it. The final numbers below come from serving both versions side by side (a git worktree of the pre-fix `HEAD` on :3001 against the working tree on :3000 for dev; the pre-fix and post-fix production builds on :4173/:4174). Before/after runs were interleaved, with their order swapped every round, 4 rounds each. Cells show the **median worst frame · median long-task total**, in ms.
+
+**dev build, 1x CPU** (n=4/4) — median worst frame ms · median long-task total ms
+
+| Phase | Before | After |
+|---|---|---|
+| Send → tree: worst frame | 150 · 151 | 166 · 147 |
+| Expand all | 83 · 96 | 75 · 84 |
+| Collapse all | 17 · 0 | 17 · 0 |
+| Scroll 60 frames (expanded) | 41 · 0 | 41 · 0 |
+| Type "accusamus" + search applies | 33 · 0 | 17 · 0 |
+| ↑ wrap 1 → 126 | 33 · 0 | 17 · 0 |
+| 20× Enter | 58 · 0 | 33 · 0 |
+| Network response → rows visible (ms) | 368 | 372 |
+| Worst single frame across runs: scroll / typing | 50 / 50 | 67 / 17 |
+| Counter while debouncing | 0 results | Searching… |
+
+**dev build, 4x CPU** (n=4/4) — median worst frame ms · median long-task total ms
+
+| Phase | Before | After |
+|---|---|---|
+| Send → tree: worst frame | 775 · 1344 | 741 · 960 |
+| Expand all | 408 · 410 | 375 · 389 |
+| Collapse all | 58 · 55 | 33 · 52 |
+| Scroll 60 frames (expanded) | 216 · 5726 | 158 · 4481 |
+| Type "accusamus" + search applies | 191 · 1210 | 108 · 112 |
+| ↑ wrap 1 → 126 | 175 · 276 | 158 · 216 |
+| 20× Enter | 266 · 3066 | 208 · 3010 |
+| Network response → rows visible (ms) | 1352 | 1061 |
+| Worst single frame across runs: scroll / typing | 267 / 217 | 450 / 117 |
+| Counter while debouncing | 0 results | Searching… |
+
+**prod build, 1x CPU** (n=4/4) — median worst frame ms · median long-task total ms
+
+| Phase | Before | After |
+|---|---|---|
+| Send → tree: worst frame | 67 · 0 | 67 · 0 |
+| Expand all | 33 · 0 | 33 · 0 |
+| Collapse all | 17 · 0 | 17 · 0 |
+| Scroll 60 frames (expanded) | 17 · 0 | 17 · 0 |
+| Type "accusamus" + search applies | 17 · 0 | 17 · 0 |
+| ↑ wrap 1 → 126 | 17 · 0 | 17 · 0 |
+| 20× Enter | 17 · 0 | 17 · 0 |
+| Network response → rows visible (ms) | 532 | 127 |
+| Worst single frame across runs: scroll / typing | 17 / 33 | 17 / 17 |
+| Counter while debouncing | 0 results | Searching… |
+
+**prod build, 4x CPU** (n=4/4) — median worst frame ms · median long-task total ms
+
+| Phase | Before | After |
+|---|---|---|
+| Send → tree: worst frame | 308 · 406 | 250 · 386 |
+| Expand all | 183 · 192 | 183 · 167 |
+| Collapse all | 17 · 0 | 33 · 0 |
+| Scroll 60 frames (expanded) | 50 · 0 | 50 · 0 |
+| Type "accusamus" + search applies | 75 · 71 | 67 · 72 |
+| ↑ wrap 1 → 126 | 33 · 0 | 33 · 0 |
+| 20× Enter | 75 · 56 | 58 · 0 |
+| Network response → rows visible (ms) | 490 | 561 |
+| Worst single frame across runs: scroll / typing | 50 / 83 | 67 / 83 |
+| Counter while debouncing | 0 results | Searching… |
+
+
+**Reading the numbers honestly:**
+- **Dev build, normal CPU (the stated target, no frame over ~50 ms):** medians are within target after the fix: scroll 41 ms, typing 17 ms, ↑ wrap 17 ms, 20× Enter 33 ms. The warm "before" was already close on scroll (41 ms). The earlier 267–533 ms scroll frames came from colder runs, so the gain here is in typing and navigation (33→17, 58→33). One of the four "after" scroll runs hit a 67 ms frame (the worst "before" run was 50 ms), so "never over 50 ms" isn't guaranteed on this machine.
+- **Dev build, 4× CPU:** typing went from 1,210 ms of long tasks to 112 ms (typing no longer touches the tree). Scrolling went from 5.7 s to 4.5 s blocked but is still heavy. The profile shows what remains is React 19's development-only cost of creating each new row as it scrolls in, which memoization can't remove and which doesn't exist in production.
+- **Production:** at normal CPU every phase sits at the 17–33 ms frame floor, before and after. The drop in "network response → rows visible" from 532 to 127 ms at normal CPU reverses at 4× (490→561), so I'm not claiming it.
+- Functional acceptance (20/20, dev server, scratchpad `acceptance.cjs`): `/todos/1`, `POST /photos` and `/users` fully expanded as before; `/photos` rendered 402–443 ms after the network response, root open and items collapsed; "accusamus" → `Searching…` → `1 of 126`, first match expanded into view and highlighted; ↑ wraps 1→126 and ↓ wraps 126→1; Enter during the debounce applies immediately; "0 results" only for real no-match queries; Headers→Raw keeps the query (bar hidden on Headers); Expand all → 35,002 rows with 39 in the DOM; Collapse all → `[5000 items]`; keyboard toggle, Save and the Headers tab work; zero console errors or warnings. (One failure in the first run was a test-selector bug that matched the *request* builder's Headers tab. The pre-fix build behaved identically, and the fixed selector passes.)
+
+**Status:** Awaiting approval.

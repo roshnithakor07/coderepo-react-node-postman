@@ -180,6 +180,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px
 .icon-btn { display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: var(--radius-md); color: var(--text-secondary); transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease); flex-shrink: 0; font-size: 16px; }
 .icon-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
 .icon-btn.active { background: var(--brand-dim); color: var(--brand); }
+.icon-btn:disabled { color: var(--text-tertiary); opacity: 0.4; cursor: default; }
+.icon-btn:disabled:hover { background: none; color: var(--text-tertiary); }
 .account-chip { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: var(--radius-md); background: var(--bg-workspace); border: 1px solid var(--border-subtle); font-size: 12px; font-weight: 600; color: var(--text-primary); cursor: default; }
 .account-avatar { width: 20px; height: 20px; border-radius: 50%; background: var(--brand-dim); color: var(--brand); display: grid; place-items: center; font-size: 9px; font-weight: 800; flex-shrink: 0; }
 .logout-btn { height: 30px; padding: 0 12px; border: 1px solid var(--border-default); border-radius: var(--radius-md); background: transparent; color: var(--text-secondary); font-size: 12px; font-weight: 600; transition: all var(--t-fast) var(--ease); }
@@ -240,6 +242,10 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px
 .s4xx { color: var(--s4xx); background: var(--s4xx-bg); }
 .s5xx { color: var(--s5xx); background: var(--s5xx-bg); }
 .serr { color: var(--danger); background: var(--danger-bg); }
+.history-load-more-btn { width: 100%; height: 30px; margin-top: 6px; border: 1px solid var(--border-default); border-radius: var(--radius-md); background: transparent; color: var(--primary); font-size: 11px; font-weight: 600; transition: all var(--t-fast); }
+.history-load-more-btn:hover:not(:disabled) { border-color: var(--primary); background: var(--primary-dim); }
+.history-load-more-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--primary-dim); }
+.history-load-more-btn:disabled { color: var(--text-tertiary); cursor: default; opacity: 0.7; }
 .history-clear-btn { width: 100%; height: 30px; margin-top: 6px; border: 1px solid var(--border-default); border-radius: var(--radius-md); background: transparent; color: var(--text-tertiary); font-size: 11px; font-weight: 600; transition: all var(--t-fast); }
 .history-clear-btn:hover { border-color: var(--danger); color: var(--danger); background: var(--danger-bg); }
 .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 36px 16px; gap: 10px; color: var(--text-tertiary); text-align: center; }
@@ -370,11 +376,57 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px
 .response-empty-icon { font-size: 32px; opacity: 0.3; }
 .response-empty p { font-size: 13px; color: var(--text-tertiary); }
 .response-empty small { font-size: 11px; color: var(--text-tertiary); opacity: 0.6; }
+.response-large-notice { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; gap: 10px; padding: 24px; text-align: center; }
+.response-large-notice p { font-size: 13px; color: var(--text-secondary); font-weight: 600; }
+.response-large-notice small { font-size: 11px; color: var(--text-tertiary); }
+.response-large-notice .btn-ghost { margin-top: 4px; }
+
+/* ─── In-response search (Ctrl+F) ─── */
+.response-search-bar { display: flex; align-items: center; gap: 8px; padding: 6px 14px; flex-shrink: 0; border-bottom: 1px solid var(--border-default); background: var(--bg-overlay); }
+.response-search-icon { font-size: 11px; opacity: 0.6; flex-shrink: 0; }
+.response-search-input { flex: 1; height: 26px; padding: 0 8px; border: 1px solid var(--border-default); border-radius: var(--radius-sm); background: var(--bg-input); color: var(--text-primary); font-family: var(--font-mono); font-size: 12px; }
+.response-search-input:focus { outline: none; border-color: var(--focus-border); box-shadow: 0 0 0 2px var(--focus-ring); }
+.response-search-count { font-size: 11px; color: var(--text-tertiary); font-family: var(--font-mono); white-space: nowrap; min-width: 62px; text-align: right; }
+.response-search-nav { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: var(--radius-sm); color: var(--text-secondary); font-size: 12px; transition: all var(--t-fast); flex-shrink: 0; }
+.response-search-nav:hover:not(:disabled) { background: var(--bg-hover); color: var(--text-primary); }
+.response-search-nav:focus-visible { outline: 2px solid var(--focus-border); outline-offset: 1px; }
+.response-search-nav:disabled { color: var(--text-tertiary); opacity: 0.4; cursor: default; }
+mark.search-match { background: var(--warning-bg); color: var(--text-primary); border-radius: 2px; }
+mark.search-match-current { background: var(--warning); color: var(--bg-base); }
+
 /* Always show scrollbar so user knows response is scrollable */
 .response-body-wrap { flex: 1; overflow-y: scroll; overflow-x: auto; scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) rgba(255,255,255,0.04); }
 .response-body { padding: 14px; font-family: var(--font-mono); font-size: 12px; line-height: 1.8; color: var(--text-primary); white-space: pre-wrap; word-break: break-all; }
 .response-error { padding: 16px; color: var(--danger); font-size: 13px; line-height: 1.6; display: flex; flex-direction: column; gap: 6px; }
 .response-error strong { font-size: 14px; font-weight: 700; }
+
+/* ─── JSON tree view (Pretty tab) — virtualized: only rows in the current
+   scroll viewport (+ overscan) are ever real DOM elements, regardless of
+   how many are logically expanded. ROW_HEIGHT in JsonView.jsx must match
+   .json-vrow's height/line-height exactly. ─── */
+.response-body-json { white-space: normal; word-break: normal; }
+.json-toolbar { display: flex; align-items: center; gap: 12px; padding: 6px 14px; flex-shrink: 0; border-bottom: 1px solid var(--border-default); background: var(--bg-overlay); }
+.json-toolbar-btn { font-size: 11px; font-weight: 600; color: var(--text-secondary); padding: 2px 8px; border-radius: var(--radius-sm); transition: all var(--t-fast); }
+.json-toolbar-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.json-toolbar-btn:focus-visible { outline: 2px solid var(--focus-border); outline-offset: 1px; }
+.json-view { position: relative; font-family: var(--font-mono); font-size: 12px; }
+.json-view-window { position: absolute; top: 0; left: 0; right: 0; }
+.json-vrow { height: 20px; line-height: 20px; padding-right: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.json-vrow-gutter { display: inline-block; width: 14px; flex-shrink: 0; }
+.json-punct { color: var(--text-secondary); }
+.json-key { color: var(--info); }
+.json-string { color: var(--success); }
+.json-number { color: var(--warning); }
+.json-bool { color: var(--patch); }
+.json-null { color: var(--text-tertiary); }
+.json-toggle { display: inline-grid; place-items: center; width: 14px; height: 14px; vertical-align: middle; border-radius: 3px; color: var(--text-tertiary); transition: all var(--t-fast); }
+.json-toggle:hover { background: var(--bg-hover); color: var(--text-primary); }
+.json-toggle:focus-visible { outline: 2px solid var(--focus-border); outline-offset: 1px; }
+.json-caret { display: inline-block; font-size: 8px; transition: transform var(--t-fast) var(--ease); }
+.json-caret.open { transform: rotate(90deg); }
+.json-collapsed-summary { color: var(--text-tertiary); font-family: var(--font-mono); font-size: 11px; font-style: italic; padding: 0 3px; border-radius: 3px; transition: all var(--t-fast); }
+.json-collapsed-summary:hover { background: var(--bg-hover); color: var(--text-secondary); }
+.json-collapsed-summary:focus-visible { outline: 2px solid var(--focus-border); outline-offset: 1px; }
 
 /* ─── Headers table ─── */
 .headers-table { width: 100%; border-collapse: collapse; }

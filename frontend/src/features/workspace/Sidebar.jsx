@@ -56,7 +56,7 @@ function CollectionItem({ collection, defaultOpen, activeRequestId, onSelectRequ
 	);
 }
 
-export function Sidebar({ collections, history, activeRequestId, onSelectRequest, onCreateCollection, onRenameCollection, onDeleteCollection, onClearHistory, onSelectHistory, onResizeMouseDown }) {
+export function Sidebar({ collections, history, historyHasMore, historyLoadingMore, onLoadMoreHistory, activeRequestId, onSelectRequest, onCreateCollection, onRenameCollection, onDeleteCollection, onClearHistory, onSelectHistory, onResizeMouseDown }) {
 	const [activeTab, setActiveTab] = useState("Collections");
 	const [showNew, setShowNew] = useState(false);
 	const [newName, setNewName] = useState("");
@@ -160,6 +160,11 @@ export function Sidebar({ collections, history, activeRequestId, onSelectRequest
 												{entry.status && <span className={`hist-status ${statusClass(entry.status)}`}>{entry.status}</span>}
 											</button>
 										))}
+										{historyHasMore && (
+											<button className="history-load-more-btn" onClick={onLoadMoreHistory} disabled={historyLoadingMore}>
+												{historyLoadingMore ? "Loading…" : "Load more"}
+											</button>
+										)}
 										<button className="history-clear-btn" onClick={onClearHistory}>Clear history</button>
 									</>
 								)
