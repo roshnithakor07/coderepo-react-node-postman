@@ -3863,3 +3863,34 @@ Merged with `git merge --no-ff feature/response-viewer-polish` into `main` (merg
 - `fb367f1` "style: apply Prettier formatting to source": the repo's `.prettierrc` applied with Prettier 3.9.9 (run externally, not pinned) to all 30 `frontend/src`/`backend/src` files and `README.md`. The compiled output was confirmed equivalent (frontend bundle diff limited to a JSX `{" "}` and CSS value spacing; backend files identical after minification). HackerRank-provided files, `.vscode/` and `transcripts/` were untouched. No `prettier` dependency or format script was added.
 - `4a7a465`: `.git-blame-ignore-revs` lists `fb367f1`, so blame lines attributed to the formatting commit drop from 3,597 to 115.
 - Verified: build, 51/51 tests, `git diff --check`, and a browser click-test of 10/10 (send, JSON tree, search navigation, history reload, save to collection, save response, no console errors). Test data created by the click-test was deleted.
+
+---
+
+## 2026-09-25 — feature/kv-editor-polish — Key-value editor polish (Params/Headers)
+
+**Status:** Awaiting approval.
+
+**Task:** In `KeyValueEditor.jsx`: automatically add a new row when typing in the last row; show the delete button only on row hover/focus while keeping it keyboard-reachable; add an optional, compact Description column; add a bulk-edit toggle between the table and raw text ("key:value" per line, "//" = disabled) that round-trips with no data loss; and set a minimum height for the request/response split so the tabs never look empty. Rules: GUIDELINES §2.2 (no new dependencies, all self-written); keep URL ↔ Params sync working; tests for bulk parsing and round trip; build, tests and click-test; push and wait for approval.
+
+**Scope check:** only Params and Headers use `KeyValueEditor`. The Body tab is a single textarea for every body type, including `form` (sent as a raw urlencoded string), so there is no Body form table to polish. Left as an open question rather than silently building a new form-body table.
+
+**What changed:**
+- `frontend/src/features/request-builder/kvBulk.js` (new, pure): `rowsToBulkText` / `parseBulkText`. Lossless: no trimming; backslash escapes only where the format needs them (`\n`, `\r`, `\:` in keys, `\/` so an enabled key can start with `//`, `\\`); descriptions are carried over by key from the rows the text came from; blank rows are dropped; pasted Windows line endings are handled.
+- `KeyValueEditor.jsx`:
+  - A trailing **placeholder row**, not stored in request data, replaces "+ Add row". Typing into it creates the real row; it's rendered as the last item of the same list with the key of its future index, so React keeps the cursor in place.
+  - A Description column.
+  - A "Bulk edit" / "Key-value edit" toggle. Bulk edits apply live, so the URL keeps following Params; if the rows change from outside (e.g. the URL bar), the text is rebuilt.
+- `styles.css`: five-column grid with a compact, secondary-styled description input; the delete button uses `opacity: 0` until the row is hovered or anything in it is focused (`:focus-within`), is always visible on `(hover: none)` touch devices, and stays in the tab order; the placeholder row hides its checkbox and delete button (also removed from the tab order); bulk textarea and hint; under 600px the description column is hidden (data kept). Styles are scoped to `.kv-editor` so the Environments modal's shared `.kv-del-btn`/`.add-row-btn` are unaffected.
+- `App.jsx`: `REQUEST_PANE_MIN_PX = 200` and `RESPONSE_PANE_MIN_PX = 180`, measured from the real bar/tab/row heights. The splitter drag is clamped to them (proportional if the window is too short for both), and the panes get `min-height: min(Npx, 45%)`; the request pane may now shrink (`flex: 0 1`) so a window resize can't squeeze the response pane below its minimum.
+- Backend (small, additive): an optional `description` (max 500) on saved-request param/header rows. It is added to the collections zod schema and to both mongoose row sub-schemas. Without this, zod and mongoose silently strip the field and descriptions would vanish on save. Proxy and snippet endpoints are unchanged (they drop it).
+
+**Bugs found by my own tests, and fixed:**
+1. The seeded random round-trip test (first run) found that a literal backslash directly before a line break didn't round-trip: the line break is written as `\n`, so the preceding backslash also needs escaping. Fixed in `escapeField`. That exact case is now a named regression test, and the random test runs three seeds × 2,000 cases.
+2. The first browser click-test run (13/23) showed typing into the placeholder row kept only the first letter: the placeholder was rendered outside the `rows.map(...)` array, and React only matches keys among siblings of the same list, so the element remounted and the cursor was lost. Fixed by rendering the placeholder as the last item of the same array. A key-by-key trace confirmed the cursor stays, and the "default rows disappeared" symptom in that run was a side effect of the stray keystrokes. The delete-button opacity failures in that run were only the test measuring mid-transition.
+
+**Verification:**
+- Tests: 26 new `kvBulk.test.js` tests (6,000 random round trips) and 2 new backend tests (descriptions survive save and reload; over 500 characters → 400). Full suite 79/79.
+- Build and `git diff --check` pass; Prettier-clean with the repo's `.prettierrc`.
+- Browser click-test 23/23: placeholder auto-add with the cursor kept; value and description typed into the same row; URL ↔ Params both ways, including while bulk mode is open; delete button hidden, shown on hover, reachable and working by keyboard; bulk round trip with no edits changes nothing; `//` disables a row; Send works; Headers tab and badge; saved request reopens with descriptions and a disabled row; splitter extremes keep 200px/180px; 400px with no horizontal overflow; no console errors. Saved test requests were deleted after each run.
+
+**Open questions for the user:** (1) whether to add a real key-value table for the `form` body type, which would need a data-model decision because disabled rows and descriptions can't live in a urlencoded string; (2) whether to keep the two unchecked default Params rows added on 2026-09-21 now that a placeholder row always exists.
