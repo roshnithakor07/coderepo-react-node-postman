@@ -2,23 +2,21 @@
 
 A full-stack Postman-inspired API client that lets developers compose, send, organize, and analyze HTTP requests — built on the MERN stack with a dark-first design system.
 
-![Stack](https://img.shields.io/badge/React-19-blue) ![Stack](https://img.shields.io/badge/Express-5-green) ![Stack](https://img.shields.io/badge/MongoDB-8-brightgreen) ![Stack](https://img.shields.io/badge/Bun-1.x-orange)
-
 ---
 
 ## Technology stack
 
-| Layer              | Technology                                      |
-| ------------------ | ----------------------------------------------- |
-| Frontend framework | React 19 + Vite 8                               |
-| Backend framework  | Express 5 (Node.js)                             |
-| Database           | MongoDB + Mongoose 8                            |
-| Package manager    | Bun                                             |
-| Runtime            | Bun (backend), Vite dev server (frontend)       |
-| Authentication     | JSON Web Tokens (jsonwebtoken)                  |
-| HTTP proxy         | Axios (server-side request execution)           |
-| Validation         | Zod                                             |
-| Styling            | Custom CSS design system (no component library) |
+| Layer              | Technology                                                                                                                                                                   |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Frontend framework | React 19 + Vite 8                                                                                                                                                            |
+| Backend framework  | Express 5 (Node.js)                                                                                                                                                          |
+| Database           | MongoDB + Mongoose 8                                                                                                                                                         |
+| Package manager    | Bun                                                                                                                                                                          |
+| Runtime            | Bun (backend), Vite dev server (frontend)                                                                                                                                    |
+| Authentication     | JSON Web Tokens (jsonwebtoken)                                                                                                                                               |
+| HTTP proxy         | Axios (server-side request execution) — kept because the proxy relies on its status-agnostic responses, 30 s timeout, decompression and query serialization (`axios.getUri`) |
+| Validation         | Zod                                                                                                                                                                          |
+| Styling            | Custom CSS design system (no component library)                                                                                                                              |
 
 ---
 
@@ -30,9 +28,9 @@ coderepo-react-node-postman/
 │   ├── src/
 │   │   ├── features/
 │   │   │   ├── auth/            # Login, session, JWT
-│   │   │   ├── collections/     # Collections and saved requests CRUD
+│   │   │   ├── collections/     # Collections and saved requests (unique names, clone placement)
 │   │   │   ├── environments/    # Named environments with variable substitution
-│   │   │   ├── history/         # Auto-logged request history
+│   │   │   ├── history/         # Auto-logged request history (paginated list + detail)
 │   │   │   ├── proxy/           # Core HTTP request execution engine
 │   │   │   ├── sandbox/         # Local, offline HTTP test target (stands in for a public API like httpbin.org)
 │   │   │   └── snippets/        # Code snippet generation
@@ -42,8 +40,9 @@ coderepo-react-node-postman/
 │   │   │   ├── config/          # Environment config and MongoDB connection
 │   │   │   ├── errors/          # AppError class
 │   │   │   ├── middleware/      # Auth guard and error handler
-│   │   │   └── utils/           # Variable substitution and auth-header helpers shared by proxy and snippets
+│   │   │   └── utils/           # Variable substitution, auth headers, partial-update schemas
 │   │   ├── app.js               # Express app factory
+│   │   ├── app.test.js          # End-to-end API tests (disposable MongoDB database)
 │   │   └── index.js             # Server entry point
 │   ├── .env.example
 │   └── package.json
@@ -51,14 +50,15 @@ coderepo-react-node-postman/
 │   ├── src/
 │   │   ├── features/
 │   │   │   ├── auth/            # Login page and auth API client
-│   │   │   ├── collections/     # Save-request modal and collection API client
+│   │   │   ├── collections/     # Save dialog, collection API client, saved-request helpers
 │   │   │   ├── environments/    # Environments manager modal and API client
 │   │   │   ├── history/         # History API client
-│   │   │   ├── request-builder/ # URL bar, method, params/auth/headers/body tabs
-│   │   │   ├── response-viewer/ # Status, timing, body views, snippets
+│   │   │   ├── request-builder/ # URL bar, method, params/auth/headers/body tabs, key-value editor
+│   │   │   ├── response-viewer/ # Status, timing, JSON tree, search, raw/headers, snippets
 │   │   │   └── workspace/       # App header and sidebar
 │   │   ├── shared/
 │   │   │   ├── api/             # Fetch-based API client
+│   │   │   ├── components/      # Action menu, confirm dialog, toasts, icons
 │   │   │   └── utils/           # Formatting helpers
 │   │   ├── App.jsx              # Root component
 │   │   ├── main.jsx             # React entry point
@@ -66,10 +66,14 @@ coderepo-react-node-postman/
 │   ├── .env.example
 │   ├── index.html
 │   └── vite.config.js
-├── skills/validate/             # Validator skill
-├── transcripts/                 # AI session transcripts
-├── hackerrank.yml
+├── .vscode/launch.json          # Debug configs: full app, backend only
+├── skills/validate/             # Validator skill (not exported)
+├── transcripts/                 # AI session transcripts and design decisions
+├── AGENTS.md                    # Agent instructions
+├── GUIDELINES.md                # Acceptance guidelines (not exported)
+├── hackerrank.yml               # HackerRank install and run configuration
 ├── package.json                 # Bun workspace root
+├── bun.lock
 └── setup.sh                     # MongoDB check and seed runner
 ```
 
@@ -230,17 +234,21 @@ Use these to log in — no registration needed:
 
 > Alex Rivera has the full set of seeded collections, environments, and history. Jordan Kim has a minimal setup.
 
+> `JWT_SECRET` in `backend/.env.example` is a **demo value** for local development; use your own secret for anything real.
+
 ---
 
 ## Command reference
 
-| Command                               | What it does                                              |
-| ------------------------------------- | --------------------------------------------------------- |
-| `bun install && bash setup.sh --seed` | Install dependencies + seed MongoDB                       |
-| `bun start`                           | Start frontend (port 3000) + backend (port 8000) together |
-| `bun run dev:frontend`                | Start frontend only with Vite HMR                         |
-| `bun run dev:backend`                 | Start backend only with file watcher                      |
-| `bun run seed`                        | Re-seed the database without restarting                   |
+| Command                               | What it does                                                                                                           |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `bun install && bash setup.sh --seed` | Install dependencies + seed MongoDB                                                                                    |
+| `bun start`                           | Start frontend (port 3000) + backend (port 8000) together                                                              |
+| `bun run dev:frontend`                | Start frontend only with Vite HMR                                                                                      |
+| `bun run dev:backend`                 | Start backend only with file watcher                                                                                   |
+| `bun run seed`                        | Re-seed the database without restarting                                                                                |
+| `bun test`                            | Run all tests — backend API tests and frontend unit tests (needs MongoDB running; API tests use a disposable database) |
+| `cd frontend && bun run build`        | Production build of the frontend                                                                                       |
 
 ---
 
@@ -282,11 +290,22 @@ bun install
 
 ## Features
 
-1. **API request builder** — Method selector, URL bar with `{{variable}}` placeholder support and live two-way sync with the Params tab (edit either one and the other updates immediately, with no duplicate or lost query parameters), tabbed Params / Auth / Headers / Body panels. Press `Ctrl+Enter` to send.
-2. **HTTP response analysis** — Status code badge (color-coded by class), response time, response size, Pretty / Raw / Headers views.
-3. **Request collections** — Folder tree, create and rename collections, save any request with one click, reload saved requests into the builder.
-4. **Environment management** — Named environments (Development, Production, Staging) with key-value variables. Activate via the header dropdown. Variables like `{{baseUrl}}` are resolved at send time.
-5. **Authentication support** — Per-request Bearer token, HTTP Basic (auto base64-encoded), API key in header or query param. Auto-injected into outgoing requests.
-6. **Request history** — Every sent request is auto-logged to MongoDB. Browse in the History sidebar tab and click any entry to reload it into the builder.
-7. **Code snippet generation** — Generate curl, fetch, axios, or Python snippets for the current request with live environment variable substitution. One-click copy.
-8. **Resizable panels** — Drag the splitter between the request builder and response viewer to adjust the layout.
+1. **API request builder** — Method selector, URL bar with `{{variable}}` highlighting and live two-way sync with the Params tab, tabbed Params / Auth / Headers / Body panels. Key-value tables add a row as you type, have an optional description column, hover/focus-revealed delete, and a **bulk edit** mode (`key:value` per line, `//` to disable) that round-trips without data loss.
+2. **HTTP response analysis** — Status badge, response time and size. Pretty view is a collapsible **JSON tree** (virtualized, smooth on very large responses) with **Expand all / Collapse all** and **in-response search** (match count, next/previous with wrap-around). Raw and Headers views; save the response as a file.
+3. **Request collections** — Create, rename, and delete collections. Save a request, and **Save** again to update it in place (unsaved-changes indicator; **Save as new…** for a copy). Each saved request's ⋯ menu: **Clone** (placed directly below the original, then opened for renaming), **Copy** (the URL, with `{{variables}}` unresolved), **Rename**, **Delete**. Request names are **unique within a collection** (case-insensitive).
+4. **Environment management** — Named environments with key-value variables, activated from the header dropdown; `{{variables}}` are resolved at send time.
+5. **Authentication support** — Per-request Bearer token, HTTP Basic, or API key (header or query), injected into outgoing requests.
+6. **Request history** — Every sent request is logged. Browse with **Load more** pagination, click an entry to reload it, delete single entries (hover ×) or clear all.
+7. **Code snippet generation** — curl, fetch, axios, or Python for the current request, with environment variables substituted. One-click copy.
+8. **Resizable layout** — Drag the request/response divider (from the request tabs bar down to the response header) and resize the sidebar.
+9. **Keyboard shortcuts** — `Ctrl/⌘+Enter` sends from the URL bar; `Ctrl/⌘+F` searches the response, `Enter` / `Shift+Enter` move between matches, `Esc` closes. ⋯ menus open with `Enter` or `↓`, move with `↑`/`↓`, select with `Enter`, close with `Esc`; inline renames confirm with `Enter` and cancel with `Esc`.
+
+---
+
+## Architecture & decisions
+
+- **Backend:** Express 5 on Bun, one folder per feature (`routes → controller → service → repository → Mongoose model`). Controllers validate with Zod, services hold business rules (e.g. unique request names, clone placement), repositories own all database access. Errors go through one handler that returns concise JSON errors with proper status codes (400/401/404/409), never stack traces.
+- **Frontend:** React 19 + Vite, one folder per feature with its own API client; shared components (action menu, dialogs, toasts) and a single CSS design system of tokens. No component, state, or icon libraries.
+- **Data:** MongoDB via Mongoose; every start re-seeds a deterministic baseline.
+
+The reasoning behind the notable choices is recorded in **[transcripts/02-design-decisions.md](transcripts/02-design-decisions.md)**. For example: the dependency freeze, the virtualized JSON tree, partial updates that never reset unsent fields, the history API's summary list, blocking duplicate request names, and the keyboard-accessible menu.

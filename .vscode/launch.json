@@ -3,13 +3,30 @@
     "configurations": [
         {
             "type": "node",
-            "name": "Debug Postman Clone Application",
+            "name": "Debug Reqway (full app)",
             "request": "launch",
             "runtimeExecutable": "bun",
-            "runtimeArgs": ["run", "start"],
+            "runtimeArgs": [
+                "run",
+                "start"
+            ],
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
-            "skipFiles": ["<node_internals>/**"]
+            "skipFiles": [
+                "<node_internals>/**"
+            ]
+        },
+        {
+            "type": "node",
+            "name": "Debug Reqway backend",
+            "request": "launch",
+            "runtimeExecutable": "bun",
+            "program": "${workspaceFolder}/backend/src/index.js",
+            "cwd": "${workspaceFolder}/backend",
+            "console": "integratedTerminal",
+            "skipFiles": [
+                "<node_internals>/**"
+            ]
         }
     ]
 }
