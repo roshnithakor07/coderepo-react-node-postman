@@ -205,3 +205,4 @@ Branch `feature/response-viewer-polish` added four things to the Pretty tab: JSO
 
 - **"Directly below the original" uses an optional `afterRequestId` on the existing create route** (no new route). The service renumbers the collection in its current display order around the insertion point. Chosen over accepting a raw `sortOrder` from the client, which would need several requests and could race.
 - **After cloning, the clone's name opens selected for renaming,** and every way of dismissing it keeps "<name> Copy": the clone already exists, so dismissing never deletes it.
+- **Status:** Merged into `main` (merge commit `c8c951b`, 2026-09-26).

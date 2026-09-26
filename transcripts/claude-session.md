@@ -4196,3 +4196,7 @@ Re-running the sweep reports no gaps across all 40 kinds.
   - clone flow 13/13: below the original in the server and the sidebar; the clone loaded; the rename field focused, fully selected and scrolled into view; Esc, click-outside and empty-Enter keep the default; typing replaces and Enter saves; normal Rename unchanged; failure opens no rename field;
   - menu 18/18, Clone/Copy 14/14, states 18/18, blockers 15/15, KV 23/23, split 52/52, reviewer 15/15.
 - No test data left behind.
+
+### Update — approved and merged
+
+**Status:** Merged — approved 2026-09-26, merged into `main` with `--no-ff` (merge commit `c8c951b`); the merged `main` builds and passes 117/117 tests. `fix/review-blockers` deleted locally and on `origin`. The user chose to skip both optional follow-ups (showing where a conflicting name is; removing the legacy duplicate in the local dev DB).
