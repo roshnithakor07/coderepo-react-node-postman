@@ -4200,3 +4200,71 @@ Re-running the sweep reports no gaps across all 40 kinds.
 ### Update — approved and merged
 
 **Status:** Merged — approved 2026-09-26, merged into `main` with `--no-ff` (merge commit `c8c951b`); the merged `main` builds and passes 117/117 tests. `fix/review-blockers` deleted locally and on `origin`. The user chose to skip both optional follow-ups (showing where a conflicting name is; removing the legacy duplicate in the local dev DB).
+
+---
+
+## 2026-09-26 — chore/submission-docs — Submission docs and config (audit H2, H3, M1, M2, L1–L3)
+
+**Status:** Awaiting approval.
+
+**Task:** after merging `fix/review-blockers`, start from the latest `main` and do the rest of the audit's fix list:
+- **H2:** a backend debug config in `.vscode/launch.json` (`bun src/index.js` from `backend/`), named Reqway, so S19 passes.
+- **H3:** the README:
+  - `bun test` in the commands;
+  - no shields.io badges (S17);
+  - an updated feature list;
+  - a fixed project tree;
+  - an "Architecture & decisions" section linking `transcripts/02-design-decisions.md`.
+- **M1:** `setup.sh` prints Reqway.
+- **M2:** one README line explaining why axios is kept.
+- **L1:** a comment in the root `.env.example`.
+- **L2:** point the `origin` remote at the new repository name.
+- **L3:** label `JWT_SECRET` as a demo value.
+
+Then rerun the full validator.
+
+**Done:**
+- `launch.json` now has "Debug Reqway (full app)" (`bun run start`) and "Debug Reqway backend" (`program: ${workspaceFolder}/backend/src/index.js`, `cwd: ${workspaceFolder}/backend`). Same `type: node` + `runtimeExecutable: bun` pattern as the existing config.
+- `setup.sh` ends with "Reqway setup complete".
+- `backend/.env.example` has a comment marking `JWT_SECRET` as a local demo value; the README says the same under the seeded accounts.
+- README:
+  - badges removed;
+  - the axios line explains its role (status-agnostic responses via `validateStatus`, the 30s timeout, decompression, `axios.getUri` query serialization);
+  - the project tree matches the repo (`shared/components/`, `.vscode/launch.json`, the root files, export-ignored paths marked);
+  - `bun test` (all backend and frontend tests; needs MongoDB) and the frontend build added to the commands;
+  - the feature list covers the JSON tree and search, bulk edit, descriptions, history pagination and delete, Clone/Copy/Rename/Delete, unique names and keyboard shortcuts;
+  - a new "Architecture & decisions" section.
+- The `origin` remote now points at `git@github.com:roshnithakor07/coderepo-react-node-postman.git` (a local config change, verified with `git fetch`).
+
+**L1 not done — the audit finding was wrong (correction to the audit entry above).** The audit said "the root `.env.example` is empty". In fact **there is no root `.env.example`**: the audit ran `cat .env.example 2>/dev/null`, which printed nothing because the file doesn't exist. The `.env.example` files seen in a listing were `backend/` and `frontend/`. `setup.sh` only copies examples that exist, so nothing is missing. Creating a root file just to hold a comment would add a pointless file (and a pointless root `.env`), so it was reported to the user instead.
+
+**Full validator rerun (branch `chore/submission-docs` @ `027acd9`):**
+- Static checks:
+  - **S01** name `coderepo-react-node-postman`, remote updated;
+  - **S02** all layers present;
+  - **S03** all README sections present and accurate (seed counts 2/4/20/4/5 verified);
+  - **S04** `bun.lock` is the only lockfile;
+  - **S05** stack consistent;
+  - **S06** the only dependency change since the initial commit is a removal (`@fontsource/roboto`);
+  - **S07, S08, S09** unchanged, pass;
+  - **S10** no tracked `.env`, all three ignored, no secrets in history;
+  - **S11** every `hackerrank.yml` path exists;
+  - **S12** ports 3000 and 8000, proxy target correct;
+  - **S13/S17** no external URLs in runtime code or seed (`example.com` appears only as data in a unit test) and no README images;
+  - **S14/S15** 21 routes, every client method used by the UI;
+  - **S16** Prettier-clean, no `console.log` or `debugger`;
+  - **S18** archive 1,443,840 bytes (under 5 MB), README included, GUIDELINES and skills excluded, no `.env`/`node_modules`/`dist`;
+  - **S19** both configs resolve (cwd and program exist), `start` is a real script, and the backend config's command was actually run.
+- Runtime checks, on a fresh clone of the pushed branch (disposable DB, backend on :8100):
+  - **R01** install exit 0 in 3s, seed counts match, "Reqway setup complete";
+  - **R02** build pass;
+  - **R03** 117/117 tests;
+  - **R05** health reports the DB connected (started with the debug config's exact command);
+  - **R06** baseline counts correct;
+  - **R07** 401 without, bad-token and wrong-password auth; 200 with;
+  - **R08** collections (20 requests), environments, history, proxy 200, snippet 200;
+  - **R09** create, clone-below 201, rename 200, duplicate name 409, delete 204, gone;
+  - **R10** 400 (invalid, malformed, bad id), 404 (missing, other account);
+  - **R11** the reseed removes a probe;
+  - **R12** disposable DB dropped, port freed, the user's dev servers untouched;
+  - **R04** (the exact `bun start` on 3000/8000) is **MANUAL until H1**, which the user scheduled after both merges.
