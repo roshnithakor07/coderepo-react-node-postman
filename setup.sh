@@ -62,4 +62,4 @@ case "$MODE" in
         ;;
 esac
 
-log_info "Postman Clone setup complete"
+log_info "Reqway setup complete"
