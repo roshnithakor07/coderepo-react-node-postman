@@ -280,7 +280,17 @@ export function EnvironmentsModal({ environments, onClose, onCreate, onUpdate, o
 								<div
 									key={env._id}
 									className={`env-list-item ${selected?._id === env._id ? "selected" : ""}`}
+									role="button"
+									tabIndex={0}
+									aria-pressed={selected?._id === env._id}
 									onClick={() => selectEnv(env)}
+									onKeyDown={(e) => {
+										// Only the row itself: Enter/Space on its inner buttons keep their own meaning.
+										if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
+											e.preventDefault();
+											selectEnv(env);
+										}
+									}}
 								>
 									<div
 										className={`env-active-dot ${env.isActive ? "active" : ""}`}

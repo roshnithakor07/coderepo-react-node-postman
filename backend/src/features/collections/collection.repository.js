@@ -1,4 +1,5 @@
 import { Collection, SavedRequest } from "./collection.model.js";
+import { normalizeRequestName } from "./request-name.js";
 
 export const collectionRepository = {
 	async findAllByAccount(accountId) {
@@ -29,10 +30,18 @@ export const collectionRepository = {
 		return req.toObject();
 	},
 	async updateRequest(id, accountId, data) {
-		return SavedRequest.findOneAndUpdate({ _id: id, accountId }, { $set: data }, { new: true, runValidators: true }).lean();
+		// findOneAndUpdate skips document hooks, so keep nameKey in sync here.
+		const set = data.name === undefined ? data : { ...data, nameKey: normalizeRequestName(data.name) };
+		return SavedRequest.findOneAndUpdate({ _id: id, accountId }, { $set: set }, { new: true, runValidators: true }).lean();
 	},
 	async removeRequest(id, accountId) {
 		return SavedRequest.findOneAndDelete({ _id: id, accountId }).lean();
+	},
+	async setRequestSortOrders(accountId, orders) {
+		if (orders.length === 0) return;
+		await SavedRequest.bulkWrite(
+			orders.map(({ id, sortOrder }) => ({ updateOne: { filter: { _id: id, accountId }, update: { $set: { sortOrder } } } })),
+		);
 	},
 	async removeRequestsByCollection(collectionId, accountId) {
 		return SavedRequest.deleteMany({ collectionId, accountId });

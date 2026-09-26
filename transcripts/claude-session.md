@@ -3929,3 +3929,270 @@ The default pane on load (229px) is above the first threshold.
 ### Update — approved and merged
 
 **Status:** Merged — approved 2026-09-26, merged into `main` with `--no-ff` (merge commit `73a68d3`); the merged `main` builds and passes 79/79 tests. `feature/kv-editor-polish` deleted locally and on `origin`. The user asked not to start `feature/form-body-table` yet.
+
+---
+
+## 2026-09-26 — chore/submission-audit — Pre-submission audit (report only; no fixes yet)
+
+**Status:** Report delivered; awaiting the user's choice of fixes.
+
+**Task:** Audit, and report only (no fixes until approved): the full `skills/validate` validator; the AGENTS.md §6 / GUIDELINES.md contract line by line; a fresh-clone install and start; secrets in git history; readiness of the log and transcripts for export, including the AGREEMENT block; README accuracy; guideline rules; and a reviewer's first five minutes. Output a priority table.
+
+**How it was run, and why:**
+- The fresh clone came from `origin/main` (`21f3e7d`) into the scratchpad. The exact `hackerrank.yml` install command ran with one deliberate deviation: a pre-created `backend/.env` pointing at a disposable `postman_db_audit_*` database and port 8100. The start command's `prestart` always wipes and re-seeds, and the user's dev servers occupy 3000/8000. The validator itself forbids stopping processes the audit didn't start and touching the live database.
+- The runtime API checks ran against the clone's own backend. The UI click-through ran against the user's dev servers (same commit). The disposable database was dropped and the audit backend stopped afterwards.
+
+**Findings (by priority):**
+- **Blocker 1 (S15/S16):** `PUT /requests/:id`, `DELETE /requests/:id` and `DELETE /history/:id` have API clients but no UI; `GET /collections/:id/requests` is unused because the collection list already embeds requests. That's 4 public routes with no reachable consumer, plus dead client methods.
+- **Blocker 2:** `log.txt` has not been exported to `transcripts/` (AGENTS §6.2). Do this as the final step.
+- **Blocker 3:** the log has no `AGREEMENT RECORDED` line (AGENTS §3); it's pending the user's "I agree".
+- **High 1:** the full `bun start` (R04) and a full-restart reset were not executed on the fresh clone because the ports were occupied (MANUAL).
+- **High 2:** `.vscode/launch.json` has no backend entrypoint configuration (S19) and says "Postman Clone".
+- **High 3:** README gaps. No `bun test`, external shields.io badges, a feature list missing later work, a tree missing `shared/components`/`.vscode`, and no architecture/decisions pointer.
+- **Medium:** stale "Postman Clone" in `setup.sh` output; the axios justification isn't visible in the README.
+- **Low:**
+  - The root `.env.example` is empty.
+  - The `origin` remote still uses the old repository name.
+  - A demo `JWT_SECRET` default ships in `backend/.env.example`.
+  - The browser logs the deliberate wrong-password 401 to the console (inherent).
+
+**Passed:** everything else. Clean install (exit 0, 4s) with seed counts matching the README; build; 79/79 tests; health reports the DB; auth, reads, the full create/update/read/delete cycle, errors and ownership (404); start-time reseed; no secrets or `.env` in history; `.env` files ignored; archive 1.32 MB with the correct export rules; Prettier-clean source; no frontend console logging; American English; offline-safe seed data; the reviewer click-through (login, seeded collections, send, environments, history, snippets, save, second account, 400px).
+
+---
+
+## 2026-09-26 — fix/review-blockers — B1: every backend route reachable from the UI
+
+**Status:** Awaiting approval.
+
+**Task (from the audit, B1, "add the missing UI" option):** saved-request menu with Rename and Delete (confirm); Save on an already-saved request updates it (PUT) with no duplicate, and the loaded saved request is shown with an unsaved-changes indicator; a hover-revealed delete per history entry (no confirm, immediate update); loading/error states and toasts; remove only `GET /collections/:id/requests` and its unused client method; tests; S15 and S16 must pass. The branch is based on `chore/submission-audit`, so the audit's transcript entry travels with it.
+
+**What changed:**
+- **Saved requests.**
+  - The Save button now updates the loaded saved request in place (PUT, same id, no duplicate), or opens the save dialog when nothing saved is loaded.
+  - A request created through the dialog becomes the loaded one.
+  - The loaded request shows as "Collection › Name" on the right of the Params/Auth/Headers/Body tab row, with an "Unsaved changes" dot (also on its sidebar item) and a "Save as new…" action. Putting it in the tab row, rather than a bar above the URL, keeps the request pane height unchanged, so the no-cut-row default from the last round still holds (verified: 229px before and after loading).
+  - Each saved request has a hover/focus-revealed "⋯" menu with Rename (inline, stays open on failure) and Delete (confirm dialog; the builder keeps its contents but is unlinked).
+- **History:** each entry gets a hover/focus-revealed × button. No confirm: the row disappears immediately and is restored in place if the server refuses.
+- **Toasts:** a small self-written toast stack (`shared/components/Toasts.jsx`). Success clears after 3s, errors after 6s, and each can be dismissed; errors use `role="alert"`. Every new action reports success or failure. Save shows "Saving…" while pending.
+- **Keyboard access:** the collection "⋯" button now uses the same reveal pattern (opacity, visible on hover/focus-within/open, always on touch) instead of `display: none`, which had made it unreachable by keyboard.
+- **Removed:** `GET /collections/:id/requests` (route, controller, dead `getRequests` service method) and `collectionApi.listRequests`. The collection list already embeds each collection's requests.
+- **Pure helpers with tests:** `features/collections/savedRequest.js` (saveable fields, the unsaved-changes check by value, immutable list updates).
+
+**Pre-existing bug found and fixed (outside the literal B1 scope, same root cause):** all three update endpoints (`PUT /collections/:id`, `PUT /requests/:id`, `PUT /environments/:id`) validated with `schema.partial()`, and zod still applies each field's `.default()` when the field is missing. So:
+- a rename carrying only `{ name }` would have wiped a saved request's URL, params, headers, body and auth (caught by the new rename test on its first run);
+- renaming a collection has been resetting its description to "";
+- **saving an environment in the Environments modal (which sends `{ name, variables }`) has been silently deactivating the active environment**, so `{{variables}}` stopped resolving.
+
+Fixed with `shared/utils/update-schema.js#updateSchemaFrom(schema)`: every field optional with its default removed, still strict and still validated. Regression tests cover all three.
+
+**Mistakes along the way (tests, not the app):**
+- The first click-test run couldn't find the test request: the newest collection is listed first and starts expanded, and my click collapsed it.
+- The second run stopped at the rename-success step because clearing the error toast moved focus out of the rename input.
+
+Both runs left their test collection behind; it was deleted each time, and cleanup now runs in a `finally` block.
+
+**Real UI bug caught by the click-test:** the saved-request "⋯" menu opened underneath the next collection's header. The row action was centred with `transform: translateY(-50%)`, which creates a stacking context and traps the dropdown's `z-index`. Replaced with `top: 0; bottom: 0; margin: auto` (no transform).
+
+**Verification:**
+- **Tests:** 93/93 (14 new):
+  - backend: update in place with no duplicate, rename keeps other fields (and an empty name is rejected), delete then a 404 on repeat, another account can't delete (404) a saved request or a history entry, single history delete, the removed route returns 404, collection rename keeps the description, saving an active environment keeps it active;
+  - frontend: 7 `savedRequest` tests.
+- **Build and formatting:** the build, `git diff --check` and Prettier on the changed files pass.
+- **Validator S15/S16 re-check:** 21 backend product routes, 21 API-client methods, each with a UI caller (was 4 unreachable routes).
+- **Browser click-tests:**
+  - new flows 15/15: Save on an unsaved request opens the dialog; loaded context shown; unchanged pane height; unsaved indicator appears, clears on save and on typing the value back; PUT with no POST and no duplicate; Save as new; menu reveal by hover and Tab; rename error (toast, form kept) and success; delete with confirm; history delete failure (restored in place) and success (gone server-side); no unexpected console errors;
+  - regressions: KV editor 23/23, split 52/52, reviewer walkthrough 15/15 (updated for the new Save behavior: Save on the loaded seeded request sends a PUT and shows a toast, and "Save as new…" opens the dialog).
+
+### Update — interaction states: inline rename buttons, color choice, full hover/active/focus sweep (not yet approved)
+
+**Request:** (1) the inline rename ✓ has no hover; add hover, active, focus-visible and disabled (empty or unchanged name) states plus a saving state, and the same for ✕. (2) Check whether orange (`--brand`) is right for ✓ under the `--brand` = navigation/active, `--primary` = actions split; make both inline rename forms identical and explain the pick. (3) Sweep every button/clickable for missing hover, active or focus-visible states, list the findings and fix them with existing tokens and timing. (4) Enter confirms and Esc cancels in the rename input.
+
+**Color decision: `--primary` (blue).** ✓ confirms an action (saving a name), and the documented split reserves `--brand` for navigation and the active/selected state, with actions on `--primary` like Send and `.btn-primary`. All three inline forms (new collection, collection rename, request rename) share `.inline-btn-ok`, so they stay identical. States use the existing `--primary-hover` / `--primary-active` / `--primary-disabled` tokens. The timing tokens in this repo are `--t-fast` (100ms) and `--ease`; no `--duration-fast` exists.
+
+**Identical rename forms by construction:** the collection rename now uses the same `InlineRename` component as the saved-request rename instead of separate markup.
+- ✓ is disabled while the name is empty or unchanged.
+- While saving, ✓ shows a spinner with `aria-busy`, and the input and ✕ are locked (Esc is ignored until the request settles).
+- Enter confirms, and Esc cancels (`preventDefault` + `stopPropagation`).
+- The field is selected on focus.
+- A failure keeps the form open.
+- The collection rename also gained success/error toasts; it previously had no error handling at all.
+
+**Sweep findings** (a script listed every clickable element in the JSX and checked the CSS for each state):
+- **Active (pressed):** missing on 36 of 40 kinds of clickable element. Only Sign in, Send and `.btn-primary` had one, and the ✓'s active rule came with this change.
+- **Hover:** missing on the ✓ (`.inline-btn-ok`).
+- **Focus-visible:** `<button>`s all get the global focus rule, but two clickable `<div>`s had no focus style (`.collection-header`, `.env-list-item`).
+- **Keyboard access:** the Environments list item wasn't keyboard-reachable at all (a plain `<div>` with `onClick`). It now has `role="button"`, `tabIndex={0}`, `aria-pressed`, and Enter/Space select it (only when the row itself is focused, so its inner Activate/Delete buttons keep their own behavior).
+
+**Fix:** one pressed-state rule per kind of control, using existing tokens:
+- rows, tabs and list items → `--bg-active`;
+- small icon buttons → `scale(0.94)`;
+- text buttons → `translateY(1px)` (as Send already did);
+- all excluding disabled buttons;
+- plus focus rings for the two `<div>` rows, matching the global button ring.
+
+Re-running the sweep reports no gaps across all 40 kinds.
+
+**Noticed, not changed (a question for the user):** the global `button:focus-visible` ring uses `--brand` (orange), while inputs use `--primary` (blue). Under the split, keyboard focus is interaction, so `--primary` would be more consistent. Left as is because it's outside this request.
+
+**Failed attempts (test harness, not the app):**
+- My first edit script didn't apply because Prettier had reformatted `InlineRename`; I replaced the function by its boundaries instead.
+- A click-test crashed when the delayed-save route was removed before the held request continued ("Route is already handled"). The crash bypassed cleanup and left a test collection, which was deleted.
+- The environment keyboard check first used a script `.focus()` (no `:focus-visible` after mouse use) and then Tab from the page start (the modal comes last in tab order). Real keyboard navigation from inside the modal confirmed it works.
+
+**Verification:**
+- Build, 93/93 tests, Prettier and `git diff --check` pass.
+- States click-test 18/18:
+  - ✓ disabled when unchanged or empty; blue `rgb(47,103,204)`; hover `rgb(37,82,170)`; pressed transform; ✕ hover; keyboard focus ring;
+  - Esc cancels and Enter confirms (toast) for the collection rename;
+  - the request rename ✓ is styled identically;
+  - saving state (spinner, `aria-busy`, everything locked, Esc ignored) and completion;
+  - hover and pressed for ⋯, Save as new…, Bulk edit, history × and toast close;
+  - an environment row reached by Tab with a ring, and Enter selects it;
+  - no console errors.
+- Regressions: new flows 15/15, KV editor 23/23, reviewer walkthrough 15/15.
+- No test data left behind.
+
+### Update — blue focus rings, Clone/Copy, redesigned ⋯ menu (not yet approved)
+
+**Requests in this round (several mid-turn messages, in order):**
+1. Make button focus outlines blue to match inputs.
+2. Add Duplicate to the saved-request ⋯ menu:
+   - copy every field under the name "<name> Copy" / "Copy 2"…;
+   - place it directly below the original (propose the smallest backend change and ask first if needed);
+   - load the copy with a toast, a loading state and a double-click guard;
+   - tests.
+3. Add Copy URL: the saved URL with `{{variables}}` unresolved, a "URL copied" toast, and an error toast if the clipboard fails.
+4. Rename the items to **Clone** and **Copy** and order the menu Clone, Copy, Rename, Delete.
+5. Restyle the menu:
+   - hand-drawn 16px stroke icons; 36px rows; hover styling; a divider; red Delete; the specified tokens and sizes;
+   - arrow keys, Enter, Esc returning focus to ⋯, and click-outside;
+   - never clipped, flipping upward near the bottom;
+   - the same component for the collection menu.
+6. A reference screenshot of the target menu.
+7. A screenshot pointing out a Delete issue.
+
+**Focus rings:**
+- **One color:** every keyboard focus ring is now `2px solid var(--primary)`, like inputs. Before, button focus used `--brand`, and four response-viewer controls used `--focus-border`. The history "Load more" button had only a faint `--primary-dim` glow.
+- **A flash found by the click-test:** controls with `transition: all` (Save, Send, Environments rows) animated the outline from the browser's default thick, text-colored ring, so for about 100ms a white/gray ring showed before turning blue. Buttons and `role="button"` elements now rest with `outline: 2px solid transparent`, so the ring fades in from transparent blue instead.
+
+**Clone (formerly "Duplicate"):**
+- Clones from the stored version, not unsaved builder edits, through the existing `POST /collections/:id/requests`.
+- Copies every field: method, URL, params and headers including disabled rows and descriptions, body, body type, auth and the request description.
+- Named with `nextCopyName` ("<name> Copy", then "Copy 2", "Copy 3"…, checked against names in the same collection).
+- On success it loads the copy with a "Cloned as …" toast; on failure it shows an error toast and nothing changes.
+- A per-request in-flight set plus the menu's busy state prevent a second copy.
+- It's inserted locally with the server's own sort rule (`insertSavedRequestInOrder`), so the sidebar never jumps on reload.
+
+**Placement "directly below the original" is not done yet, pending the user's go-ahead.** The backend already has a `sortOrder` field (model, index and list sort), but the create route's strict schema doesn't accept it, and every new request gets `sortOrder: 0`, ordered newest-first among equals. So today a clone appears where new requests appear, at the top of that ordering. The smallest change is proposed to the user (see the chat and log): an optional `afterRequestId` on the existing create route, with no new route.
+
+**Copy:** `navigator.clipboard.writeText(req.url)`. A missing or refused Clipboard API lands in the error toast.
+
+**Menu redesign:**
+- New shared `ActionMenu` component, used for both the saved-request menu (Clone, Copy, Rename | Delete) and the collection menu (Rename | Delete).
+- It's rendered into `document.body` with fixed positioning, because the sidebar's `overflow-x: hidden` scroll area would otherwise always clip an absolutely positioned menu.
+- Placement comes from a pure, tested `computeMenuPosition`: below the ⋯ button, flipping above when there's no room, clamped inside the viewport.
+- After the reference screenshot, the menu's **left** edge aligns with the ⋯ button, so it extends right over the workspace instead of back over the sidebar list.
+- Keyboard: focus starts on the first item; ↑/↓/Home/End wrap and skip disabled items (pure, tested `nextEnabledIndex`); Enter selects; Esc closes and returns focus to ⋯; Tab closes; ArrowDown on ⋯ opens it.
+- Mouse: click-outside closes, and the menu re-positions on scroll and resize.
+- Async items (Clone) keep the menu open and disabled until they finish ("Cloning…" with a spinner).
+- The icons are hand-drawn SVGs using `currentColor` (`shared/components/icons.jsx`).
+- The row whose menu is open stays highlighted (as in the reference).
+- The old `ItemMenu` component and all `.dropdown-*` CSS were removed as dead code.
+
+**Bugs found and fixed along the way:**
+1. **Portal click-through:** React events bubble through the component tree even from a portal, so a click in the collection menu would have toggled the collection. The menu root stops click propagation.
+2. **Enter on ⋯ collapsed the collection:** the collection header's Enter/Space handler also fired for key presses on its inner ⋯ button (a latent bug). It now only acts when the header itself is focused.
+3. **Delete icon lost its red on hover (the user's screenshot):** the general hover rule (`.action-menu-item:hover:not(:disabled) .action-menu-icon`) outranked the danger rule. Delete now stays `--danger` for both icon and label in every state. My hover test had only checked the first item, so it now also checks the hovered and keyboard-focused Delete.
+
+**Test-harness issues (not app bugs):**
+- a substring row locator that picked "Dup source Copy" instead of the original;
+- focus-ring colors read mid-transition, now waiting, and comparing only the color channels for the fade's alpha;
+- a missing import in the helper tests.
+
+**Verification:**
+- **Tests:** 107/107 (new since the last push: `nextCopyName`, `buildDuplicatePayload` and `insertSavedRequestInOrder` in `savedRequest.test.js`; `computeMenuPosition` and `nextEnabledIndex` in `actionMenu.test.js`; 2 backend clone tests: identical fields under a new id, and 404 with nothing created for a missing collection).
+- **Validator:** S15/S16 pass (21 routes, 21 client methods, all with UI callers, no new routes).
+- **Build and formatting:** the build, Prettier and `git diff --check` pass.
+- **Click-tests:**
+  - menu 18/18: items and divider, 36px rows / 8px 12px padding / 10px gap / 16px icons, 200px menu with tokens, colors, left-aligned below near the top, flips above near the bottom, fully on screen and uncovered at its corners, hover brightening, Delete red on hover and focus, click-outside, the collection menu identical, no accidental toggle, the full keyboard flow;
+  - clone and copy 14/14;
+  - states 18/18, blockers 15/15, KV editor 23/23, split 52/52, reviewer walkthrough 15/15.
+- No test data left behind.
+
+### Update — clone below the original + rename-after-clone; unique request names (not yet approved)
+
+**Requests:**
+1. Approved: an optional `afterRequestId` on the existing create route, so clones land directly below the original, with its two tests.
+2. After cloning:
+   - load the clone;
+   - open its name in inline rename with "<name> Copy" fully selected: Enter saves; Esc, click-outside or an empty name keep the default;
+   - scroll it into view;
+   - keep the "Copy" suffix.
+3. Mid-turn: request names must be unique per collection (trimmed, case-insensitive):
+   - enforced by the backend on create, rename, clone and move;
+   - 409 with the exact message "A request named "X" already exists in this collection.";
+   - a unique compound index against simultaneous requests;
+   - no conflict with itself;
+   - check the seed first;
+   - inline errors (instant, plus the server's 409) in rename and the Save dialog;
+   - tests;
+   - record that Postman allows duplicates and we block them.
+4. Mid-turn: a screenshot asking why a freshly cloned request's name showed "already exists".
+
+**Clone position (backend):**
+- `POST /collections/:id/requests` accepts an optional `afterRequestId` (create schema only, via `.extend()`; updates still reject it, and `sortOrder` is never client-settable).
+- The service loads the collection in its current display order and returns 400 `INVALID_POSITION` if the id isn't one of its requests. Otherwise it renumbers the collection 0…n in that same order with one `bulkWrite`, leaving a gap after the original, and creates the clone there.
+- Renumbering also resolves the ties between requests that all had the default `sortOrder` 0.
+
+**Clone flow (frontend):**
+- The clone is inserted locally right after the original (`insertSavedRequestAfter`, which exactly matches the server) and loaded.
+- Its collection opens it in `InlineRename` with `keepOnDismiss`. The text is selected on focus and scrolled into view.
+- Esc, click-outside, and Enter on an empty or unchanged name all keep "<name> Copy". A browser rule meant the Enter case needed handling: pressing Enter doesn't submit a form whose only submit button is disabled, so a click-test caught Enter on an emptied name doing nothing, and it's now handled explicitly.
+- The normal Rename keeps its approved behavior (Enter does nothing on an empty or unchanged name, and there's no outside-click dismiss).
+- A pre-existing mismatch was fixed in passing: "Save as new…" appended new requests to the end locally, while the server lists them first. They now go first locally too.
+- `insertSavedRequestInOrder` lost its only caller and was removed.
+
+**Unique names:**
+- **Seed checked:** no duplicates (20 requests across 3 collections, all distinct).
+- **The user's live dev DB** has one pre-existing duplicate pair ("GET — Inspect request" twice in "API Sandbox — HTTP Testing", from earlier testing). It was left untouched and reported.
+- **Backend:**
+  - `normalizeRequestName` (trim + lowercase), with a stored `nameKey` kept in sync by a `pre("validate")` hook on create and explicitly in the repository's update (`findOneAndUpdate` skips hooks).
+  - A unique compound index `{ collectionId: 1, nameKey: 1 }`, partial on `nameKey` being a string, so legacy documents without the field don't collide on a missing value. The dev server built it on the live DB without errors.
+  - The service's `assertNameAvailable` compares normalized names of the other requests in the collection (legacy documents included) and excludes the request being renamed. It returns 409 `DUPLICATE_NAME` with the exact message.
+  - `withDuplicateNameGuard` turns a MongoDB duplicate-key error (code 11000) from two simultaneous writes into the same 409.
+  - There's no move-between-collections feature (the update schema has no `collectionId`), so nothing to enforce there.
+- **Frontend:**
+  - The API client now attaches `status` and `code` to thrown errors.
+  - `hasNameConflict`, `duplicateNameMessage` and `normalizeRequestName` mirror the server. `nextCopyName` compares the same way, so a clone never collides even with case variants.
+  - `InlineRename` takes `validate(name)` for instant feedback and `{ error }` results for the server's 409, shown in `--danger` under the field with `aria-invalid`/`aria-describedby`, ✓ disabled and the text kept.
+  - The Save dialog gets the same instant check against the chosen collection, re-checked when the collection changes, and shows a 409 inline instead of in its top banner.
+- **Real UX bug found by the click-test:** after a server 409 the rename input had lost focus, because it's disabled while saving and disabling drops focus, so typing did nothing. Focus now returns with the caret at the end of the rejected name.
+
+**The user's screenshot (why "…Copy" showed "already exists"):** investigated against the live DB rather than assumed.
+- The collection already had a "GET — Inspect request Copy" (`…c3eb59`, created 13:07 by an earlier clone, before the uniqueness rule).
+- The new clone's default was therefore "GET — Inspect request Copy 2" (reproduced with the live names), and "…Copy" is a genuine duplicate. That clone is now "GET — Inspect request KK".
+- Conclusion: the rule is correct, but the message doesn't show which request holds the name when it's scrolled out of view. An improvement was proposed to the user rather than made unasked.
+
+**Test-harness issues (not app bugs):**
+- the older Clone/Copy suite needed Esc after each clone and the new "directly below" expectation;
+- stale toasts were read by the clone test;
+- one harness attempt removed toast nodes directly from the DOM, which corrupted React rendering (replaced with clicking × from a script);
+- the row-above-the-field lookup had to go through the new error wrapper;
+- one KV run failed because the external `jsonplaceholder.typicode.com` was briefly unreachable, and passed on rerun.
+
+**Verification:**
+- **Tests:** 117/117. New backend tests:
+  - position after the original (C, B, A, then C, B, B Copy, A, and so on);
+  - `afterRequestId` from another collection → 400 with nothing created; malformed id → 400; `PUT` can't set a position;
+  - duplicates on create, rename and clone → 409 with the exact message, including case/whitespace variants;
+  - the same name in another collection is allowed; keeping or re-casing its own name is allowed;
+  - two simultaneous creates → [201, 409];
+  - the unique index itself rejects a duplicate that bypasses the service check (code 11000).
+  - New frontend tests: `insertSavedRequestAfter`, Save-as placement, the name helpers, and case-insensitive `nextCopyName`.
+- **Validator:** S15/S16 pass (21 routes, all client methods used).
+- **Build and formatting:** build, Prettier and `git diff --check` pass.
+- **Click-tests:**
+  - names 11/11;
+  - clone flow 13/13: below the original in the server and the sidebar; the clone loaded; the rename field focused, fully selected and scrolled into view; Esc, click-outside and empty-Enter keep the default; typing replaces and Enter saves; normal Rename unchanged; failure opens no rename field;
+  - menu 18/18, Clone/Copy 14/14, states 18/18, blockers 15/15, KV 23/23, split 52/52, reviewer 15/15.
+- No test data left behind.

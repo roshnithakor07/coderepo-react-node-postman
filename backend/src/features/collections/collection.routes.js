@@ -4,7 +4,6 @@ import {
 	createCollection,
 	updateCollection,
 	deleteCollection,
-	listRequests,
 	createRequest,
 	updateRequest,
 	deleteRequest,
@@ -15,7 +14,6 @@ collectionRouter.get("/", listCollections);
 collectionRouter.post("/", createCollection);
 collectionRouter.put("/:id", updateCollection);
 collectionRouter.delete("/:id", deleteCollection);
-collectionRouter.get("/:id/requests", listRequests);
 collectionRouter.post("/:id/requests", createRequest);
 
 export const savedRequestRouter = Router();

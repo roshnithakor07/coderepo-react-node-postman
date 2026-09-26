@@ -162,3 +162,46 @@ Branch `feature/response-viewer-polish` added four things to the Pretty tab: JSO
 - **Dragging uses the grab offset** (height at grab + pointer delta), so the divider never jumps when grabbed and tracks the pointer 1:1 in both directions.
 - **Bulk edit is shrink-first:** the toggle and hint have priority over the textarea's size. A sticky-positioning attempt failed at very small panes, so the textarea now yields first. The textarea gets 3+ lines whenever the pane allows it (≥ ~245px), toggle and hint are guaranteed from ~190px, and below that the panel scrolls, since a textarea can't shrink past its own 22px frame.
 - **Status:** Merged into `main` (merge commit `73a68d3`, 2026-09-26).
+
+## Submission audit method (branch `chore/submission-audit`)
+
+- **The fresh-clone test used a disposable database instead of the live one.** `bun start`'s `prestart` always wipes and re-seeds, and the validator forbids stopping processes the audit didn't start or touching the live database. So the clone got a pre-created `backend/.env` (disposable `postman_db_audit_*`, backend port 8100), recorded as the one deviation from the README flow. The full `bun start` on 3000/8000 is left as MANUAL until the ports can be freed with the user's approval.
+
+## Review blockers: saved-request editing, history delete, partial updates (branch `fix/review-blockers`)
+
+- **Every public route gets a real UI consumer, or goes.** The validator's backend-integration check (S15) fails routes that only the API can reach. Update and delete for saved requests and per-entry history delete got UI. `GET /collections/:id/requests` was removed rather than wired in, because the collection list already embeds each collection's requests.
+- **Save means "update what's loaded".** It matches Postman and avoids duplicates. The loaded request is always visible (tab row, sidebar dot), and "Save as new…" is the explicit escape hatch for making a copy.
+- **The loaded-request indicator lives in the tab row,** not in a new bar, so loading a saved request never changes the request pane's height (the default split was just tuned to never cut a row).
+- **Unsaved changes are compared by value** over exactly the fields Save writes (normalized rows), so typing a value back reads as clean.
+- **History delete is optimistic without confirm** (the user's call). The row is removed immediately and restored in place if the server refuses. Saved-request delete keeps a confirm, since saved work is costlier to lose.
+- **Toasts are self-written** (a hook plus a stack), with no dependency (GUIDELINES §2.2).
+- **Partial updates never apply defaults.** `updateSchemaFrom(schema)` derives the update schema from the create schema with defaults stripped, fixing silent data loss on rename (saved requests, collection descriptions) and the Environments modal deactivating the active environment on every save.
+- **Row actions avoid CSS transforms,** because a transform creates a stacking context that traps a dropdown's z-index under later sidebar content.
+
+### Interaction states (branch `fix/review-blockers`, round 2)
+
+- **Inline confirm (✓) is `--primary`, not `--brand`:** it's an action, per the brand/primary split. One shared class keeps the three inline forms identical.
+- **One rename component for collections and saved requests,** so the two forms can't drift apart: disabled when there's nothing to save, a saving state that locks the form, Enter/Esc, and keep-open-on-failure.
+- **Pressed states follow one rule per control kind** with existing tokens (`--bg-active` for rows/tabs, a slight scale for icon buttons, a 1px press for text buttons, as Send already did), instead of per-button one-offs.
+- **Clickable non-button rows get `role="button"`, `tabIndex` and Enter/Space,** plus the same focus ring as buttons. The Environments list was mouse-only before.
+
+### ⋯ menu, Clone/Copy, focus color (branch `fix/review-blockers`, round 3)
+
+- **One focus color, `--primary`,** for every keyboard focus ring, matching inputs. A transparent resting outline on buttons prevents `transition: all` from flashing the browser's default ring.
+- **The menu renders in a portal with fixed positioning,** because the sidebar is a clipping scroll container and any in-flow dropdown would be cut off at its edge or covered by later rows. Placement is a pure function (below, flip above, clamp to viewport), aligned with the trigger's left edge so the menu covers the workspace rather than the list it acts on.
+- **One component for both ⋯ menus,** so collection and request menus can't drift apart visually or in keyboard behavior.
+- **Clone copies the stored request,** not unsaved builder edits, and uses the existing create route. It's inserted locally with the server's sort rule, so the list doesn't jump on reload.
+- **"Directly below the original" needs the create route to accept a position.** The model already has `sortOrder`, but the route can't set it, and user-created requests all share `sortOrder: 0`. Proposed an optional `afterRequestId` on the existing route (no new route), pending the user's approval.
+- **Destructive menu items keep `--danger` in every state,** icon included.
+
+### Request names are unique per collection (branch `fix/review-blockers`)
+
+- **Postman allows duplicate request names; we block them, for clarity.** In a sidebar, history and clone flow, two identically named requests in one collection are easy to confuse, and nothing requires them. Names are compared trimmed and case-insensitive ("Get Users" = "get users "). Different collections may share names.
+- **The backend is the source of truth:** a service check gives a friendly 409 `DUPLICATE_NAME`, and a unique compound index on `{ collectionId, nameKey }` (a stored normalized name) makes simultaneous creates/renames safe. The index is partial, so documents written before `nameKey` existed can't collide on a missing value.
+- **The frontend mirrors the rule for instant feedback** (rename field, Save dialog) but always handles the server's 409 the same way, inline under the field.
+- **Clone defaults can never collide:** "<name> Copy", "Copy 2", "Copy 3"… are chosen with the same comparison.
+
+### Clone placement and rename-after-clone
+
+- **"Directly below the original" uses an optional `afterRequestId` on the existing create route** (no new route). The service renumbers the collection in its current display order around the insertion point. Chosen over accepting a raw `sortOrder` from the client, which would need several requests and could race.
+- **After cloning, the clone's name opens selected for renaming,** and every way of dismissing it keeps "<name> Copy": the clone already exists, so dismissing never deletes it.

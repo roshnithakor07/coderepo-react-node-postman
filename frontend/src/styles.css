@@ -173,8 +173,18 @@ button {
 	border: none;
 	background: none;
 }
+/* A transparent outline at rest, so controls with `transition: all` fade the
+   focus ring in from transparent blue instead of flashing the browser's
+   default (thick, text-colored) ring for the first frames. */
+button,
+[role="button"] {
+	outline: 2px solid transparent;
+	outline-offset: 2px;
+}
+/* One keyboard-focus color app-wide: --primary, the same as inputs. Focus is
+   interaction, not navigation, so it's blue rather than --brand. */
 button:focus-visible {
-	outline: 2px solid var(--brand);
+	outline: 2px solid var(--primary);
 	outline-offset: 2px;
 	border-radius: var(--radius-sm);
 }
@@ -758,7 +768,8 @@ textarea:focus-visible {
 	white-space: nowrap;
 }
 .collection-menu-btn {
-	display: none;
+	display: grid;
+	opacity: 0;
 	width: 20px;
 	height: 20px;
 	border-radius: var(--radius-sm);
@@ -768,8 +779,13 @@ textarea:focus-visible {
 	flex-shrink: 0;
 	transition: all var(--t-fast);
 }
-.collection-header:hover .collection-menu-btn {
-	display: grid;
+/* Revealed on hover or keyboard focus (opacity keeps it in the tab order),
+   always visible on touch screens — the same pattern as the request and
+   history row actions below. */
+.collection-header:hover .collection-menu-btn,
+.collection-header:focus-within .collection-menu-btn,
+.collection-menu-btn[aria-expanded="true"] {
+	opacity: 1;
 }
 .collection-menu-btn:hover {
 	background: var(--bg-active);
@@ -918,8 +934,8 @@ textarea:focus-visible {
 	background: var(--primary-dim);
 }
 .history-load-more-btn:focus-visible {
-	outline: none;
-	box-shadow: 0 0 0 3px var(--primary-dim);
+	outline: 2px solid var(--primary);
+	outline-offset: 2px;
 }
 .history-load-more-btn:disabled {
 	color: var(--text-tertiary);
@@ -1003,22 +1019,56 @@ textarea:focus-visible {
 	display: grid;
 	place-items: center;
 	padding: 0;
+	transition:
+		background var(--t-fast) var(--ease),
+		color var(--t-fast) var(--ease),
+		border-color var(--t-fast) var(--ease),
+		transform var(--t-fast) var(--ease);
 }
+/* Confirm is an action, so it uses the --primary family (like Send and the
+   dialogs' primary button), not --brand, which marks navigation/active. */
 .inline-btn-ok {
-	background: var(--brand);
+	background: var(--primary);
 	color: #fff;
 }
+.inline-btn-ok:hover:not(:disabled) {
+	background: var(--primary-hover);
+}
+.inline-btn-ok:active:not(:disabled) {
+	background: var(--primary-active);
+}
 .inline-btn-ok:disabled {
-	opacity: 0.4;
+	background: var(--primary-disabled);
+	color: var(--text-tertiary);
 	cursor: not-allowed;
+}
+.inline-btn-ok.is-saving {
+	background: var(--primary);
+	color: #fff;
+	cursor: progress;
+}
+.inline-btn-spinner {
+	width: 12px;
+	height: 12px;
+	border: 2px solid rgba(255, 255, 255, 0.35);
+	border-top-color: #fff;
+	border-radius: 50%;
+	animation: spin 0.7s linear infinite;
 }
 .inline-btn-cancel {
 	border: 1px solid var(--border-default);
 	color: var(--text-secondary);
 }
-.inline-btn-cancel:hover {
+.inline-btn-cancel:hover:not(:disabled) {
 	background: var(--bg-hover);
 	color: var(--text-primary);
+}
+.inline-btn-cancel:active:not(:disabled) {
+	background: var(--bg-active);
+}
+.inline-btn-cancel:disabled {
+	opacity: 0.4;
+	cursor: not-allowed;
 }
 
 /* ─── Workspace ─── */
@@ -1894,7 +1944,7 @@ textarea:focus-visible {
 	color: var(--text-primary);
 }
 .response-search-nav:focus-visible {
-	outline: 2px solid var(--focus-border);
+	outline: 2px solid var(--primary);
 	outline-offset: 1px;
 }
 .response-search-nav:disabled {
@@ -1973,7 +2023,7 @@ mark.search-match-current {
 	color: var(--text-primary);
 }
 .json-toolbar-btn:focus-visible {
-	outline: 2px solid var(--focus-border);
+	outline: 2px solid var(--primary);
 	outline-offset: 1px;
 }
 .json-view {
@@ -2033,7 +2083,7 @@ mark.search-match-current {
 	color: var(--text-primary);
 }
 .json-toggle:focus-visible {
-	outline: 2px solid var(--focus-border);
+	outline: 2px solid var(--primary);
 	outline-offset: 1px;
 }
 .json-caret {
@@ -2058,7 +2108,7 @@ mark.search-match-current {
 	color: var(--text-secondary);
 }
 .json-collapsed-summary:focus-visible {
-	outline: 2px solid var(--focus-border);
+	outline: 2px solid var(--primary);
 	outline-offset: 1px;
 }
 
@@ -2498,19 +2548,6 @@ mark.search-match-current {
 }
 
 /* ─── Dropdown ─── */
-.dropdown-menu {
-	position: absolute;
-	z-index: 200;
-	top: calc(100% + 6px);
-	right: 0;
-	min-width: 160px;
-	padding: 5px;
-	border: 1px solid var(--border-default);
-	border-radius: var(--radius-lg);
-	background: var(--bg-elevated);
-	box-shadow: var(--shadow-lg);
-	animation: menuIn 120ms var(--ease);
-}
 @keyframes menuIn {
 	from {
 		opacity: 0;
@@ -2521,29 +2558,6 @@ mark.search-match-current {
 		transform: translateY(0) scale(1);
 	}
 }
-.dropdown-item {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	width: 100%;
-	height: 34px;
-	padding: 0 10px;
-	border-radius: var(--radius-md);
-	color: var(--text-primary);
-	font-size: 12px;
-	font-weight: 500;
-	text-align: left;
-	transition: background var(--t-fast);
-}
-.dropdown-item:hover {
-	background: var(--bg-hover);
-}
-.dropdown-item.danger {
-	color: var(--danger);
-}
-.dropdown-item.danger:hover {
-	background: var(--danger-bg);
-}
 .menu-anchor {
 	position: relative;
 }
@@ -2551,6 +2565,384 @@ mark.search-match-current {
 	display: flex;
 	flex-direction: column;
 	overflow: hidden;
+}
+
+/* ─── Saved-request rows, history rows: hover/focus-revealed actions ─── */
+.request-row,
+.history-row {
+	position: relative;
+	display: flex;
+	align-items: center;
+	border-radius: var(--radius-md);
+}
+.request-row .request-item,
+.history-row .history-item {
+	flex: 1;
+	min-width: 0;
+	padding-right: 30px; /* room for the row action */
+}
+/* Vertically centred without a transform: a transform would create a
+   stacking context and trap the row menu's dropdown (z-index) underneath the
+   next collection in the sidebar. */
+.request-row > .menu-anchor,
+.history-row > .history-del-btn {
+	position: absolute;
+	right: 4px;
+	top: 0;
+	bottom: 0;
+	margin: auto 0;
+}
+.request-row > .menu-anchor {
+	display: flex;
+	align-items: center;
+	height: 22px;
+}
+.request-menu-btn,
+.history-del-btn {
+	display: grid;
+	place-items: center;
+	width: 22px;
+	height: 22px;
+	border-radius: var(--radius-sm);
+	color: var(--text-tertiary);
+	font-size: 14px;
+	opacity: 0;
+	transition: all var(--t-fast);
+}
+.request-row:hover .request-menu-btn,
+.request-row:focus-within .request-menu-btn,
+.request-menu-btn[aria-expanded="true"],
+.history-row:hover .history-del-btn,
+.history-row:focus-within .history-del-btn {
+	opacity: 1;
+}
+.request-menu-btn:hover {
+	background: var(--bg-hover);
+	color: var(--text-primary);
+}
+.history-del-btn:hover {
+	background: var(--danger-bg);
+	color: var(--danger);
+}
+@media (hover: none) {
+	.collection-menu-btn,
+	.request-menu-btn,
+	.history-del-btn {
+		opacity: 1;
+	}
+}
+.request-dirty-dot {
+	flex-shrink: 0;
+	width: 6px;
+	height: 6px;
+	margin-left: auto;
+	border-radius: 50%;
+	background: var(--brand);
+}
+
+/* ─── Loaded saved request, shown on the right of the request tab row ─── */
+.tabs-list {
+	display: flex;
+	flex-shrink: 0;
+}
+.saved-context {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
+	margin-left: auto;
+	padding-left: 16px;
+	font-size: 11px;
+}
+.saved-context-path {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	color: var(--text-tertiary);
+}
+.saved-context-collection {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.saved-context-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	color: var(--text-secondary);
+	font-weight: 600;
+}
+.saved-context-dirty {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	flex-shrink: 0;
+	color: var(--text-secondary);
+}
+.saved-context-dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--brand);
+}
+.saved-context-saveas {
+	flex-shrink: 0;
+	height: 22px;
+	padding: 0 8px;
+	border-radius: var(--radius-sm);
+	color: var(--text-tertiary);
+	font-size: 11px;
+	font-weight: 600;
+	transition: all var(--t-fast);
+}
+.saved-context-saveas:hover {
+	color: var(--primary);
+	background: var(--primary-dim);
+}
+@media (max-width: 768px) {
+	.saved-context-path,
+	.saved-context-saveas {
+		display: none;
+	}
+}
+
+/* ─── Toasts ─── */
+.toast-stack {
+	position: fixed;
+	right: 16px;
+	bottom: 16px;
+	z-index: 1000;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	max-width: min(360px, calc(100vw - 32px));
+	pointer-events: none;
+}
+.toast {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 10px 10px 10px 12px;
+	border: 1px solid var(--border-default);
+	border-radius: var(--radius-lg);
+	background: var(--bg-elevated);
+	box-shadow: var(--shadow-lg);
+	color: var(--text-primary);
+	font-size: 12px;
+	pointer-events: auto;
+	animation: menuIn 120ms var(--ease);
+}
+.toast-icon {
+	display: grid;
+	place-items: center;
+	flex-shrink: 0;
+	width: 18px;
+	height: 18px;
+	border-radius: 50%;
+	font-size: 11px;
+	font-weight: 700;
+}
+.toast-success .toast-icon,
+.toast-info .toast-icon {
+	background: var(--success-bg, rgba(74, 222, 128, 0.12));
+	color: var(--success);
+}
+.toast-error {
+	border-color: rgba(248, 113, 113, 0.35);
+}
+.toast-error .toast-icon {
+	background: var(--danger-bg);
+	color: var(--danger);
+}
+.toast-message {
+	flex: 1;
+	min-width: 0;
+}
+.toast-close {
+	flex-shrink: 0;
+	width: 22px;
+	height: 22px;
+	border-radius: var(--radius-sm);
+	color: var(--text-tertiary);
+	font-size: 14px;
+}
+.toast-close:hover {
+	background: var(--bg-hover);
+	color: var(--text-primary);
+}
+
+/* The row whose ⋯ menu is open stays highlighted while the pointer is in the
+   menu, so it's clear which request or collection the menu acts on. */
+.request-row:has(.request-menu-btn[aria-expanded="true"]) .request-item,
+.collection-header:has(.collection-menu-btn[aria-expanded="true"]) {
+	background: var(--bg-hover);
+}
+
+/* Inline field errors (duplicate request names, …) */
+.inline-rename {
+	width: 100%;
+}
+.field-error {
+	margin: 2px 6px 6px;
+	color: var(--danger);
+	font-size: 11px;
+	line-height: 1.4;
+}
+.save-field .field-error {
+	margin: 6px 0 0;
+}
+.inline-input[aria-invalid="true"],
+.save-input[aria-invalid="true"] {
+	border-color: var(--danger);
+}
+
+/* ─── Action menu (⋯ menus on collections and saved requests) ─── */
+/* Rendered into <body> with fixed positioning, so neither the sidebar's
+   scroll area nor the next collection can clip or cover it. */
+.action-menu {
+	position: fixed;
+	z-index: 900;
+	width: 200px;
+	padding: 4px;
+	border: 1px solid var(--border-default);
+	border-radius: var(--radius-md);
+	background: var(--bg-elevated);
+	box-shadow: var(--shadow-lg);
+	animation: menuIn 120ms var(--ease);
+}
+.action-menu-item {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	height: 36px;
+	padding: 8px 12px;
+	border-radius: var(--radius-sm);
+	color: var(--text-primary);
+	font-size: 12px;
+	font-weight: 500;
+	text-align: left;
+	transition:
+		background var(--t-fast) var(--ease),
+		color var(--t-fast) var(--ease);
+}
+.action-menu-icon {
+	display: grid;
+	place-items: center;
+	flex-shrink: 0;
+	width: 16px;
+	height: 16px;
+	color: var(--text-secondary);
+	transition: color var(--t-fast) var(--ease);
+}
+.action-menu-label {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.action-menu-item:hover:not(:disabled),
+.action-menu-item:focus-visible {
+	background: var(--bg-hover);
+	color: #fff;
+}
+.action-menu-item:hover:not(:disabled) .action-menu-icon,
+.action-menu-item:focus-visible .action-menu-icon {
+	color: var(--text-primary);
+}
+/* Keyboard focus shows as the hover row plus the app-wide focus color. */
+.action-menu-item:focus-visible {
+	outline: 2px solid var(--primary);
+	outline-offset: -2px;
+}
+.action-menu-item:active:not(:disabled) {
+	background: var(--bg-active);
+}
+.action-menu-item.danger,
+.action-menu-item.danger .action-menu-icon {
+	color: var(--danger);
+}
+/* Destructive items stay red in every state: the icon too, which the
+   general hover rule above would otherwise turn --text-primary. */
+.action-menu-item.danger:hover:not(:disabled),
+.action-menu-item.danger:focus-visible,
+.action-menu-item.danger:hover:not(:disabled) .action-menu-icon,
+.action-menu-item.danger:focus-visible .action-menu-icon {
+	color: var(--danger);
+}
+.action-menu-item:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+.action-menu-item[aria-busy="true"] {
+	opacity: 1;
+	cursor: progress;
+}
+.action-menu-divider {
+	height: 1px;
+	margin: 4px 0;
+	background: var(--border-subtle);
+}
+.action-menu-spinner {
+	width: 12px;
+	height: 12px;
+	border: 2px solid var(--border-default);
+	border-top-color: var(--primary);
+	border-radius: 50%;
+	animation: spin 0.7s linear infinite;
+}
+
+/* ─── Pressed and keyboard-focus states (one rule per control kind) ─── */
+/* Rows, tabs and list items press into the existing --bg-active surface. */
+.request-item:active,
+.history-item:active,
+.sidebar-tab:active,
+.tab-btn:active,
+.snippet-lang-btn:active,
+.env-list-item:active,
+.collection-header:active,
+.json-collapsed-summary:active {
+	background: var(--bg-active);
+}
+/* Small icon buttons press in slightly. */
+.icon-btn:active:not(:disabled),
+.logout-btn:active:not(:disabled),
+.collection-menu-btn:active,
+.request-menu-btn:active,
+.history-del-btn:active,
+.kv-del-btn:active,
+.modal-close:active,
+.toast-close:active,
+.json-toggle:active,
+.response-search-nav:active:not(:disabled),
+.env-del-btn:active,
+.inline-btn-cancel:active:not(:disabled),
+.service-error button:active {
+	transform: scale(0.94);
+}
+/* Text buttons press down a pixel, like Send. */
+.new-btn:active,
+.history-clear-btn:active,
+.history-load-more-btn:active:not(:disabled),
+.btn-ghost:active:not(:disabled),
+.btn-danger:active:not(:disabled),
+.snippet-copy-btn:active,
+.json-toolbar-btn:active,
+.kv-mode-btn:active,
+.add-row-btn:active,
+.saved-context-saveas:active,
+.save-btn:active:not(:disabled),
+.env-activate-btn:active,
+.inline-btn-ok:active:not(:disabled) {
+	transform: translateY(1px);
+}
+/* Clickable rows that aren't <button>s get the same focus ring as buttons. */
+.collection-header:focus-visible,
+.env-list-item:focus-visible {
+	outline: 2px solid var(--primary);
+	outline-offset: -2px;
 }
 
 /* ─── Responsive ─── */

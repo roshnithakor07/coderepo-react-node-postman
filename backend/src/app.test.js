@@ -14,6 +14,7 @@ process.env.JWT_EXPIRES_IN = "1h";
 const { initConfig } = await import("./shared/config/index.js");
 const { createApp } = await import("./app.js");
 const { WorkspaceAccount } = await import("./features/auth/workspace-account.model.js");
+const { SavedRequest } = await import("./features/collections/collection.model.js");
 
 let server;
 let baseUrl;
@@ -65,7 +66,7 @@ describe("error handling (live HTTP)", () => {
 	});
 
 	test("an invalid ObjectId in a route param returns 400 INVALID_ID, not 500", async () => {
-		const response = await authed("/collections/not-a-valid-id/requests");
+		const response = await authed("/collections/not-a-valid-id", { method: "DELETE" });
 		const payload = await response.json();
 
 		expect(response.status).toBe(400);
@@ -138,8 +139,8 @@ describe("saved request row descriptions (live HTTP)", () => {
 		});
 		expect(created.status).toBe(201);
 
-		const listed = await (await authed(`/collections/${collection.data._id}/requests`)).json();
-		const saved = listed.data.find((item) => item.name === "With descriptions");
+		const listed = await (await authed("/collections")).json();
+		const saved = listed.data.find((c) => c._id === collection.data._id).requests.find((item) => item.name === "With descriptions");
 		expect(saved.params).toEqual([
 			{ key: "page", value: "2", enabled: true, description: "1-based page number" },
 			{ key: "debug", value: "1", enabled: false },
@@ -162,6 +163,283 @@ describe("saved request row descriptions (live HTTP)", () => {
 		});
 		expect(response.status).toBe(400);
 		expect((await response.json()).error.code).toBe("VALIDATION_ERROR");
+	});
+});
+
+describe("saved request update, rename and delete; history entry delete (live HTTP)", () => {
+	const json = (method, body) => ({ method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+	async function newCollection(name) {
+		return (await (await authed("/collections", json("POST", { name }))).json()).data;
+	}
+	async function requestsIn(collectionId, token) {
+		const listed = await (
+			await (token ? fetch(`${baseUrl}/collections`, { headers: { Authorization: `Bearer ${token}` } }) : authed("/collections"))
+		).json();
+		return listed.data.find((c) => c._id === collectionId)?.requests ?? [];
+	}
+	async function otherAccountToken() {
+		const passwordHash = await bcrypt.hash("password123", 4);
+		await WorkspaceAccount.create({ name: "Other User", email: `other.${Date.now()}@example.com`, passwordHash, active: true });
+		const accounts = await WorkspaceAccount.find({ name: "Other User" }).sort({ _id: -1 }).limit(1);
+		const login = await fetch(`${baseUrl}/auth/login`, json("POST", { email: accounts[0].email, password: "password123" }));
+		return (await login.json()).data.token;
+	}
+
+	test("saving an already-saved request updates it in place: same id, no duplicate", async () => {
+		const collection = await newCollection("Update in place");
+		const created = (
+			await (
+				await authed(`/collections/${collection._id}/requests`, json("POST", { name: "Users", url: "http://localhost/a" }))
+			).json()
+		).data;
+		const updated = await authed(
+			`/requests/${created._id}`,
+			json("PUT", { name: "Users", method: "POST", url: "http://localhost/b", body: '{"x":1}', bodyType: "json" }),
+		);
+		expect(updated.status).toBe(200);
+		const requests = await requestsIn(collection._id);
+		expect(requests).toHaveLength(1);
+		expect(requests[0]).toMatchObject({
+			_id: created._id,
+			method: "POST",
+			url: "http://localhost/b",
+			body: '{"x":1}',
+			bodyType: "json",
+		});
+	});
+
+	test("rename sends only the name and leaves every other field untouched", async () => {
+		const collection = await newCollection("Rename");
+		const created = (
+			await (
+				await authed(
+					`/collections/${collection._id}/requests`,
+					json("POST", { name: "Old", url: "http://localhost/keep", params: [{ key: "q", value: "1", enabled: true }] }),
+				)
+			).json()
+		).data;
+		expect((await authed(`/requests/${created._id}`, json("PUT", { name: "New name" }))).status).toBe(200);
+		const [renamed] = await requestsIn(collection._id);
+		expect(renamed).toMatchObject({
+			name: "New name",
+			url: "http://localhost/keep",
+			params: [{ key: "q", value: "1", enabled: true }],
+		});
+		expect((await authed(`/requests/${created._id}`, json("PUT", { name: "" }))).status).toBe(400);
+	});
+
+	test("deleting a saved request removes it; deleting it again is a 404; another account can't delete it", async () => {
+		const collection = await newCollection("Delete");
+		const created = (await (await authed(`/collections/${collection._id}/requests`, json("POST", { name: "Doomed" }))).json()).data;
+		const other = await otherAccountToken();
+		const foreign = await fetch(`${baseUrl}/requests/${created._id}`, {
+			method: "DELETE",
+			headers: { Authorization: `Bearer ${other}` },
+		});
+		expect(foreign.status).toBe(404);
+		expect(await requestsIn(collection._id)).toHaveLength(1);
+		expect((await authed(`/requests/${created._id}`, { method: "DELETE" })).status).toBe(204);
+		expect(await requestsIn(collection._id)).toHaveLength(0);
+		expect((await authed(`/requests/${created._id}`, { method: "DELETE" })).status).toBe(404);
+	});
+
+	test("deleting one history entry removes only that entry; another account can't delete it", async () => {
+		const send = () => authed("/proxy", json("POST", { method: "GET", url: `${baseUrl}/sandbox/get` }));
+		await send();
+		await send();
+		const before = (await (await authed("/history?limit=100")).json()).data.items;
+		const [target, keep] = before;
+		const other = await otherAccountToken();
+		const foreign = await fetch(`${baseUrl}/history/${target._id}`, {
+			method: "DELETE",
+			headers: { Authorization: `Bearer ${other}` },
+		});
+		expect(foreign.status).toBe(404);
+		expect((await authed(`/history/${target._id}`, { method: "DELETE" })).status).toBe(204);
+		const after = (await (await authed("/history?limit=100")).json()).data.items.map((item) => item._id);
+		expect(after).not.toContain(target._id);
+		expect(after).toContain(keep._id);
+		expect(after).toHaveLength(before.length - 1);
+	});
+
+	test("partial updates never reset fields that weren't sent: collection rename keeps its description", async () => {
+		const created = (
+			await (await authed("/collections", json("POST", { name: "Keep description", description: "Seeded notes" }))).json()
+		).data;
+		expect((await authed(`/collections/${created._id}`, json("PUT", { name: "Renamed" }))).status).toBe(200);
+		const listed = (await (await authed("/collections")).json()).data.find((c) => c._id === created._id);
+		expect(listed).toMatchObject({ name: "Renamed", description: "Seeded notes" });
+	});
+
+	test("partial updates never reset fields that weren't sent: saving an active environment keeps it active", async () => {
+		const env = (
+			await (
+				await authed(
+					"/environments",
+					json("POST", { name: "Active env", isActive: true, variables: [{ key: "baseUrl", value: "http://a" }] }),
+				)
+			).json()
+		).data;
+		expect(env.isActive).toBe(true);
+		// Exactly what the Environments modal sends on Save: name + variables, no isActive.
+		const saved = await authed(
+			`/environments/${env._id}`,
+			json("PUT", { name: "Active env", variables: [{ key: "baseUrl", value: "http://b" }] }),
+		);
+		expect(saved.status).toBe(200);
+		const after = (await (await authed("/environments")).json()).data.find((e) => e._id === env._id);
+		expect(after.isActive).toBe(true);
+		expect(after.variables[0].value).toBe("http://b");
+	});
+
+	test("duplicating through the existing create route copies every field under a new id", async () => {
+		const collection = await newCollection("Duplicate");
+		const original = {
+			name: "Original",
+			description: "Request notes",
+			method: "PATCH",
+			url: "http://localhost/items/{{id}}",
+			params: [
+				{ key: "page", value: "2", enabled: true, description: "1-based" },
+				{ key: "debug", value: "1", enabled: false },
+			],
+			headers: [{ key: "X-Trace", value: "abc", enabled: false, description: "logs" }],
+			body: '{"a":1}',
+			bodyType: "json",
+			auth: { type: "basic", username: "u", password: "p" },
+		};
+		const first = (await (await authed(`/collections/${collection._id}/requests`, json("POST", original))).json()).data;
+		// What the UI sends for "Duplicate": the stored fields with the next free name.
+		const copy = await authed(`/collections/${collection._id}/requests`, json("POST", { ...original, name: "Original Copy" }));
+		expect(copy.status).toBe(201);
+		const created = (await copy.json()).data;
+		expect(created._id).not.toBe(first._id);
+		const pick = ({ description, method, url, params, headers, body, bodyType, auth }) => ({
+			description,
+			method,
+			url,
+			params,
+			headers,
+			body,
+			bodyType,
+			auth,
+		});
+		const stored = await requestsIn(collection._id);
+		const storedOriginal = stored.find((r) => r._id === first._id);
+		const storedCopy = stored.find((r) => r._id === created._id);
+		// The copy matches the stored original field for field (including model defaults such as auth.apiKeyIn).
+		expect(pick(storedCopy)).toEqual(pick(storedOriginal));
+		expect(storedCopy.params).toEqual(original.params);
+		expect(storedCopy.headers).toEqual(original.headers);
+		expect((await requestsIn(collection._id)).map((r) => r.name).sort()).toEqual(["Original", "Original Copy"]);
+	});
+
+	test("a duplicate into a collection that no longer exists fails with 404 and creates nothing", async () => {
+		const collection = await newCollection("Gone");
+		await authed(`/collections/${collection._id}`, { method: "DELETE" });
+		const response = await authed(`/collections/${collection._id}/requests`, json("POST", { name: "Orphan Copy" }));
+		expect(response.status).toBe(404);
+		const all = (await (await authed("/collections")).json()).data.flatMap((c) => c.requests);
+		expect(all.some((r) => r.name === "Orphan Copy")).toBe(false);
+	});
+
+	test("afterRequestId places the new request directly after the original; the rest keep their order", async () => {
+		const collection = await newCollection("Clone position");
+		const create = async (body) => (await (await authed(`/collections/${collection._id}/requests`, json("POST", body))).json()).data;
+		const a = await create({ name: "A" });
+		const b = await create({ name: "B" });
+		const c = await create({ name: "C" });
+		const names = async () => (await requestsIn(collection._id)).map((r) => r.name);
+		expect(await names()).toEqual(["C", "B", "A"]); // all sortOrder 0 → newest first
+		const clone = await create({ name: "B Copy", afterRequestId: b._id });
+		expect(clone.name).toBe("B Copy");
+		expect(await names()).toEqual(["C", "B", "B Copy", "A"]);
+		await create({ name: "A Copy", afterRequestId: a._id }); // after the last one → at the end
+		expect(await names()).toEqual(["C", "B", "B Copy", "A", "A Copy"]);
+		await create({ name: "C Copy", afterRequestId: c._id });
+		expect(await names()).toEqual(["C", "C Copy", "B", "B Copy", "A", "A Copy"]);
+	});
+
+	test("afterRequestId from another collection is rejected and nothing is created", async () => {
+		const first = await newCollection("Position source");
+		const second = await newCollection("Position target");
+		const foreign = (await (await authed(`/collections/${first._id}/requests`, json("POST", { name: "Elsewhere" }))).json()).data;
+		const response = await authed(
+			`/collections/${second._id}/requests`,
+			json("POST", { name: "Misplaced", afterRequestId: foreign._id }),
+		);
+		expect(response.status).toBe(400);
+		expect((await response.json()).error.code).toBe("INVALID_POSITION");
+		expect(await requestsIn(second._id)).toHaveLength(0);
+		expect((await requestsIn(first._id)).map((r) => r.name)).toEqual(["Elsewhere"]);
+		// malformed ids are a validation error; updates can't set a position at all
+		expect((await authed(`/collections/${second._id}/requests`, json("POST", { name: "Bad", afterRequestId: "nope" }))).status).toBe(
+			400,
+		);
+		expect((await authed(`/requests/${foreign._id}`, json("PUT", { afterRequestId: foreign._id }))).status).toBe(400);
+	});
+
+	test("request names are unique per collection: duplicates on create, rename and clone get 409", async () => {
+		const collection = await newCollection("Unique names");
+		const create = (body) => authed(`/collections/${collection._id}/requests`, json("POST", body));
+		const users = (await (await create({ name: "Get Users" })).json()).data;
+		const other = (await (await create({ name: "Get Posts" })).json()).data;
+
+		const dup = await create({ name: "Get Users" });
+		expect(dup.status).toBe(409);
+		expect(await dup.json()).toEqual({
+			error: { code: "DUPLICATE_NAME", message: 'A request named "Get Users" already exists in this collection.' },
+		});
+		// trimmed + case-insensitive
+		for (const variant of ["get users ", "  GET USERS", "Get users"]) expect((await create({ name: variant })).status).toBe(409);
+		// rename into an existing name
+		const rename = await authed(`/requests/${other._id}`, json("PUT", { name: " get USERS " }));
+		expect(rename.status).toBe(409);
+		expect((await rename.json()).error.message).toBe('A request named "get USERS" already exists in this collection.');
+		// clone (create with a position) into an existing name
+		expect((await create({ name: "Get Users", afterRequestId: users._id })).status).toBe(409);
+		// nothing extra was created or renamed
+		expect((await requestsIn(collection._id)).map((r) => r.name).sort()).toEqual(["Get Posts", "Get Users"]);
+	});
+
+	test("a name may repeat across collections; a request may keep (or re-case) its own name", async () => {
+		const first = await newCollection("Names A");
+		const second = await newCollection("Names B");
+		const a = (await (await authed(`/collections/${first._id}/requests`, json("POST", { name: "Shared name" }))).json()).data;
+		expect((await authed(`/collections/${second._id}/requests`, json("POST", { name: "Shared name" }))).status).toBe(201);
+		expect((await authed(`/requests/${a._id}`, json("PUT", { name: "Shared name" }))).status).toBe(200);
+		expect((await authed(`/requests/${a._id}`, json("PUT", { name: "SHARED name", url: "http://localhost/x" }))).status).toBe(200);
+		// updating other fields without a name never trips the check
+		expect((await authed(`/requests/${a._id}`, json("PUT", { url: "http://localhost/y" }))).status).toBe(200);
+	});
+
+	test("two simultaneous creates with the same name: exactly one succeeds (unique index)", async () => {
+		await SavedRequest.init(); // make sure the unique index exists before racing
+		const collection = await newCollection("Race");
+		const [r1, r2] = await Promise.all(
+			[1, 2].map(() => authed(`/collections/${collection._id}/requests`, json("POST", { name: "Racer" }))),
+		);
+		expect([r1.status, r2.status].sort()).toEqual([201, 409]);
+		expect((await requestsIn(collection._id)).map((r) => r.name)).toEqual(["Racer"]);
+	});
+
+	test("the unique index itself rejects a duplicate that bypasses the service check", async () => {
+		await SavedRequest.init();
+		const collection = await newCollection("Index guard");
+		const account = await WorkspaceAccount.findOne({ email: "test.user@example.com" });
+		await SavedRequest.create({ collectionId: collection._id, accountId: account._id, name: "Direct" });
+		let error;
+		try {
+			await SavedRequest.create({ collectionId: collection._id, accountId: account._id, name: "  DIRECT " });
+		} catch (e) {
+			error = e;
+		}
+		expect(error?.code).toBe(11000);
+	});
+
+	test("the removed per-collection request listing route no longer exists", async () => {
+		const collection = await newCollection("Removed route");
+		expect((await authed(`/collections/${collection._id}/requests`)).status).toBe(404);
 	});
 });
 
