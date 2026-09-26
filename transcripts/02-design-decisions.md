@@ -206,3 +206,10 @@ Branch `feature/response-viewer-polish` added four things to the Pretty tab: JSO
 - **"Directly below the original" uses an optional `afterRequestId` on the existing create route** (no new route). The service renumbers the collection in its current display order around the insertion point. Chosen over accepting a raw `sortOrder` from the client, which would need several requests and could race.
 - **After cloning, the clone's name opens selected for renaming,** and every way of dismissing it keeps "<name> Copy": the clone already exists, so dismissing never deletes it.
 - **Status:** Merged into `main` (merge commit `c8c951b`, 2026-09-26).
+
+## Submission docs (branch `chore/submission-docs`)
+
+- **README badges removed rather than replaced with local SVGs.** They only restated the stack table, and removing them satisfies S17 (no externally hosted media) with nothing extra to maintain.
+- **Axios stays, with its role stated in the README:** the proxy relies on its status-agnostic responses, timeout, decompression and query serialization. It has been part of the approved stack since the initial commit (the user's 2026-09-22 decision to keep it).
+- **Two debug configs** (full app, backend only), both the same `node` + `bun` pattern, so the backend can be debugged without the frontend dev server.
+- **No root `.env.example`:** the audit item assumed an empty file that doesn't exist; configuration lives in `backend/.env` and `frontend/.env`.
