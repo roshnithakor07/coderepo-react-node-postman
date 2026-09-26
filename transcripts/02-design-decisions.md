@@ -193,3 +193,15 @@ Branch `feature/response-viewer-polish` added four things to the Pretty tab: JSO
 - **Clone copies the stored request,** not unsaved builder edits, and uses the existing create route. It's inserted locally with the server's sort rule, so the list doesn't jump on reload.
 - **"Directly below the original" needs the create route to accept a position.** The model already has `sortOrder`, but the route can't set it, and user-created requests all share `sortOrder: 0`. Proposed an optional `afterRequestId` on the existing route (no new route), pending the user's approval.
 - **Destructive menu items keep `--danger` in every state,** icon included.
+
+### Request names are unique per collection (branch `fix/review-blockers`)
+
+- **Postman allows duplicate request names; we block them, for clarity.** In a sidebar, history and clone flow, two identically named requests in one collection are easy to confuse, and nothing requires them. Names are compared trimmed and case-insensitive ("Get Users" = "get users "). Different collections may share names.
+- **The backend is the source of truth:** a service check gives a friendly 409 `DUPLICATE_NAME`, and a unique compound index on `{ collectionId, nameKey }` (a stored normalized name) makes simultaneous creates/renames safe. The index is partial, so documents written before `nameKey` existed can't collide on a missing value.
+- **The frontend mirrors the rule for instant feedback** (rename field, Save dialog) but always handles the server's 409 the same way, inline under the field.
+- **Clone defaults can never collide:** "<name> Copy", "Copy 2", "Copy 3"… are chosen with the same comparison.
+
+### Clone placement and rename-after-clone
+
+- **"Directly below the original" uses an optional `afterRequestId` on the existing create route** (no new route). The service renumbers the collection in its current display order around the insertion point. Chosen over accepting a raw `sortOrder` from the client, which would need several requests and could race.
+- **After cloning, the clone's name opens selected for renaming,** and every way of dismissing it keeps "<name> Copy": the clone already exists, so dismissing never deletes it.

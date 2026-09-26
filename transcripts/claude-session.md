@@ -4118,3 +4118,81 @@ Re-running the sweep reports no gaps across all 40 kinds.
   - clone and copy 14/14;
   - states 18/18, blockers 15/15, KV editor 23/23, split 52/52, reviewer walkthrough 15/15.
 - No test data left behind.
+
+### Update — clone below the original + rename-after-clone; unique request names (not yet approved)
+
+**Requests:**
+1. Approved: an optional `afterRequestId` on the existing create route, so clones land directly below the original, with its two tests.
+2. After cloning:
+   - load the clone;
+   - open its name in inline rename with "<name> Copy" fully selected: Enter saves; Esc, click-outside or an empty name keep the default;
+   - scroll it into view;
+   - keep the "Copy" suffix.
+3. Mid-turn: request names must be unique per collection (trimmed, case-insensitive):
+   - enforced by the backend on create, rename, clone and move;
+   - 409 with the exact message "A request named "X" already exists in this collection.";
+   - a unique compound index against simultaneous requests;
+   - no conflict with itself;
+   - check the seed first;
+   - inline errors (instant, plus the server's 409) in rename and the Save dialog;
+   - tests;
+   - record that Postman allows duplicates and we block them.
+4. Mid-turn: a screenshot asking why a freshly cloned request's name showed "already exists".
+
+**Clone position (backend):**
+- `POST /collections/:id/requests` accepts an optional `afterRequestId` (create schema only, via `.extend()`; updates still reject it, and `sortOrder` is never client-settable).
+- The service loads the collection in its current display order and returns 400 `INVALID_POSITION` if the id isn't one of its requests. Otherwise it renumbers the collection 0…n in that same order with one `bulkWrite`, leaving a gap after the original, and creates the clone there.
+- Renumbering also resolves the ties between requests that all had the default `sortOrder` 0.
+
+**Clone flow (frontend):**
+- The clone is inserted locally right after the original (`insertSavedRequestAfter`, which exactly matches the server) and loaded.
+- Its collection opens it in `InlineRename` with `keepOnDismiss`. The text is selected on focus and scrolled into view.
+- Esc, click-outside, and Enter on an empty or unchanged name all keep "<name> Copy". A browser rule meant the Enter case needed handling: pressing Enter doesn't submit a form whose only submit button is disabled, so a click-test caught Enter on an emptied name doing nothing, and it's now handled explicitly.
+- The normal Rename keeps its approved behavior (Enter does nothing on an empty or unchanged name, and there's no outside-click dismiss).
+- A pre-existing mismatch was fixed in passing: "Save as new…" appended new requests to the end locally, while the server lists them first. They now go first locally too.
+- `insertSavedRequestInOrder` lost its only caller and was removed.
+
+**Unique names:**
+- **Seed checked:** no duplicates (20 requests across 3 collections, all distinct).
+- **The user's live dev DB** has one pre-existing duplicate pair ("GET — Inspect request" twice in "API Sandbox — HTTP Testing", from earlier testing). It was left untouched and reported.
+- **Backend:**
+  - `normalizeRequestName` (trim + lowercase), with a stored `nameKey` kept in sync by a `pre("validate")` hook on create and explicitly in the repository's update (`findOneAndUpdate` skips hooks).
+  - A unique compound index `{ collectionId: 1, nameKey: 1 }`, partial on `nameKey` being a string, so legacy documents without the field don't collide on a missing value. The dev server built it on the live DB without errors.
+  - The service's `assertNameAvailable` compares normalized names of the other requests in the collection (legacy documents included) and excludes the request being renamed. It returns 409 `DUPLICATE_NAME` with the exact message.
+  - `withDuplicateNameGuard` turns a MongoDB duplicate-key error (code 11000) from two simultaneous writes into the same 409.
+  - There's no move-between-collections feature (the update schema has no `collectionId`), so nothing to enforce there.
+- **Frontend:**
+  - The API client now attaches `status` and `code` to thrown errors.
+  - `hasNameConflict`, `duplicateNameMessage` and `normalizeRequestName` mirror the server. `nextCopyName` compares the same way, so a clone never collides even with case variants.
+  - `InlineRename` takes `validate(name)` for instant feedback and `{ error }` results for the server's 409, shown in `--danger` under the field with `aria-invalid`/`aria-describedby`, ✓ disabled and the text kept.
+  - The Save dialog gets the same instant check against the chosen collection, re-checked when the collection changes, and shows a 409 inline instead of in its top banner.
+- **Real UX bug found by the click-test:** after a server 409 the rename input had lost focus, because it's disabled while saving and disabling drops focus, so typing did nothing. Focus now returns with the caret at the end of the rejected name.
+
+**The user's screenshot (why "…Copy" showed "already exists"):** investigated against the live DB rather than assumed.
+- The collection already had a "GET — Inspect request Copy" (`…c3eb59`, created 13:07 by an earlier clone, before the uniqueness rule).
+- The new clone's default was therefore "GET — Inspect request Copy 2" (reproduced with the live names), and "…Copy" is a genuine duplicate. That clone is now "GET — Inspect request KK".
+- Conclusion: the rule is correct, but the message doesn't show which request holds the name when it's scrolled out of view. An improvement was proposed to the user rather than made unasked.
+
+**Test-harness issues (not app bugs):**
+- the older Clone/Copy suite needed Esc after each clone and the new "directly below" expectation;
+- stale toasts were read by the clone test;
+- one harness attempt removed toast nodes directly from the DOM, which corrupted React rendering (replaced with clicking × from a script);
+- the row-above-the-field lookup had to go through the new error wrapper;
+- one KV run failed because the external `jsonplaceholder.typicode.com` was briefly unreachable, and passed on rerun.
+
+**Verification:**
+- **Tests:** 117/117. New backend tests:
+  - position after the original (C, B, A, then C, B, B Copy, A, and so on);
+  - `afterRequestId` from another collection → 400 with nothing created; malformed id → 400; `PUT` can't set a position;
+  - duplicates on create, rename and clone → 409 with the exact message, including case/whitespace variants;
+  - the same name in another collection is allowed; keeping or re-casing its own name is allowed;
+  - two simultaneous creates → [201, 409];
+  - the unique index itself rejects a duplicate that bypasses the service check (code 11000).
+  - New frontend tests: `insertSavedRequestAfter`, Save-as placement, the name helpers, and case-insensitive `nextCopyName`.
+- **Validator:** S15/S16 pass (21 routes, all client methods used).
+- **Build and formatting:** build, Prettier and `git diff --check` pass.
+- **Click-tests:**
+  - names 11/11;
+  - clone flow 13/13: below the original in the server and the sidebar; the clone loaded; the rename field focused, fully selected and scrolled into view; Esc, click-outside and empty-Enter keep the default; typing replaces and Enter saves; normal Rename unchanged; failure opens no rename field;
+  - menu 18/18, Clone/Copy 14/14, states 18/18, blockers 15/15, KV 23/23, split 52/52, reviewer 15/15.
+- No test data left behind.
