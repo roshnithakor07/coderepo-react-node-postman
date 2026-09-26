@@ -173,8 +173,18 @@ button {
 	border: none;
 	background: none;
 }
+/* A transparent outline at rest, so controls with `transition: all` fade the
+   focus ring in from transparent blue instead of flashing the browser's
+   default (thick, text-colored) ring for the first frames. */
+button,
+[role="button"] {
+	outline: 2px solid transparent;
+	outline-offset: 2px;
+}
+/* One keyboard-focus color app-wide: --primary, the same as inputs. Focus is
+   interaction, not navigation, so it's blue rather than --brand. */
 button:focus-visible {
-	outline: 2px solid var(--brand);
+	outline: 2px solid var(--primary);
 	outline-offset: 2px;
 	border-radius: var(--radius-sm);
 }
@@ -924,8 +934,8 @@ textarea:focus-visible {
 	background: var(--primary-dim);
 }
 .history-load-more-btn:focus-visible {
-	outline: none;
-	box-shadow: 0 0 0 3px var(--primary-dim);
+	outline: 2px solid var(--primary);
+	outline-offset: 2px;
 }
 .history-load-more-btn:disabled {
 	color: var(--text-tertiary);
@@ -1934,7 +1944,7 @@ textarea:focus-visible {
 	color: var(--text-primary);
 }
 .response-search-nav:focus-visible {
-	outline: 2px solid var(--focus-border);
+	outline: 2px solid var(--primary);
 	outline-offset: 1px;
 }
 .response-search-nav:disabled {
@@ -2013,7 +2023,7 @@ mark.search-match-current {
 	color: var(--text-primary);
 }
 .json-toolbar-btn:focus-visible {
-	outline: 2px solid var(--focus-border);
+	outline: 2px solid var(--primary);
 	outline-offset: 1px;
 }
 .json-view {
@@ -2073,7 +2083,7 @@ mark.search-match-current {
 	color: var(--text-primary);
 }
 .json-toggle:focus-visible {
-	outline: 2px solid var(--focus-border);
+	outline: 2px solid var(--primary);
 	outline-offset: 1px;
 }
 .json-caret {
@@ -2098,7 +2108,7 @@ mark.search-match-current {
 	color: var(--text-secondary);
 }
 .json-collapsed-summary:focus-visible {
-	outline: 2px solid var(--focus-border);
+	outline: 2px solid var(--primary);
 	outline-offset: 1px;
 }
 
@@ -2538,19 +2548,6 @@ mark.search-match-current {
 }
 
 /* ─── Dropdown ─── */
-.dropdown-menu {
-	position: absolute;
-	z-index: 200;
-	top: calc(100% + 6px);
-	right: 0;
-	min-width: 160px;
-	padding: 5px;
-	border: 1px solid var(--border-default);
-	border-radius: var(--radius-lg);
-	background: var(--bg-elevated);
-	box-shadow: var(--shadow-lg);
-	animation: menuIn 120ms var(--ease);
-}
 @keyframes menuIn {
 	from {
 		opacity: 0;
@@ -2560,29 +2557,6 @@ mark.search-match-current {
 		opacity: 1;
 		transform: translateY(0) scale(1);
 	}
-}
-.dropdown-item {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	width: 100%;
-	height: 34px;
-	padding: 0 10px;
-	border-radius: var(--radius-md);
-	color: var(--text-primary);
-	font-size: 12px;
-	font-weight: 500;
-	text-align: left;
-	transition: background var(--t-fast);
-}
-.dropdown-item:hover {
-	background: var(--bg-hover);
-}
-.dropdown-item.danger {
-	color: var(--danger);
-}
-.dropdown-item.danger:hover {
-	background: var(--danger-bg);
 }
 .menu-anchor {
 	position: relative;
@@ -2798,11 +2772,114 @@ mark.search-match-current {
 	color: var(--text-primary);
 }
 
+/* The row whose ⋯ menu is open stays highlighted while the pointer is in the
+   menu, so it's clear which request or collection the menu acts on. */
+.request-row:has(.request-menu-btn[aria-expanded="true"]) .request-item,
+.collection-header:has(.collection-menu-btn[aria-expanded="true"]) {
+	background: var(--bg-hover);
+}
+
+/* ─── Action menu (⋯ menus on collections and saved requests) ─── */
+/* Rendered into <body> with fixed positioning, so neither the sidebar's
+   scroll area nor the next collection can clip or cover it. */
+.action-menu {
+	position: fixed;
+	z-index: 900;
+	width: 200px;
+	padding: 4px;
+	border: 1px solid var(--border-default);
+	border-radius: var(--radius-md);
+	background: var(--bg-elevated);
+	box-shadow: var(--shadow-lg);
+	animation: menuIn 120ms var(--ease);
+}
+.action-menu-item {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	height: 36px;
+	padding: 8px 12px;
+	border-radius: var(--radius-sm);
+	color: var(--text-primary);
+	font-size: 12px;
+	font-weight: 500;
+	text-align: left;
+	transition:
+		background var(--t-fast) var(--ease),
+		color var(--t-fast) var(--ease);
+}
+.action-menu-icon {
+	display: grid;
+	place-items: center;
+	flex-shrink: 0;
+	width: 16px;
+	height: 16px;
+	color: var(--text-secondary);
+	transition: color var(--t-fast) var(--ease);
+}
+.action-menu-label {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.action-menu-item:hover:not(:disabled),
+.action-menu-item:focus-visible {
+	background: var(--bg-hover);
+	color: #fff;
+}
+.action-menu-item:hover:not(:disabled) .action-menu-icon,
+.action-menu-item:focus-visible .action-menu-icon {
+	color: var(--text-primary);
+}
+/* Keyboard focus shows as the hover row plus the app-wide focus color. */
+.action-menu-item:focus-visible {
+	outline: 2px solid var(--primary);
+	outline-offset: -2px;
+}
+.action-menu-item:active:not(:disabled) {
+	background: var(--bg-active);
+}
+.action-menu-item.danger,
+.action-menu-item.danger .action-menu-icon {
+	color: var(--danger);
+}
+/* Destructive items stay red in every state: the icon too, which the
+   general hover rule above would otherwise turn --text-primary. */
+.action-menu-item.danger:hover:not(:disabled),
+.action-menu-item.danger:focus-visible,
+.action-menu-item.danger:hover:not(:disabled) .action-menu-icon,
+.action-menu-item.danger:focus-visible .action-menu-icon {
+	color: var(--danger);
+}
+.action-menu-item:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+.action-menu-item[aria-busy="true"] {
+	opacity: 1;
+	cursor: progress;
+}
+.action-menu-divider {
+	height: 1px;
+	margin: 4px 0;
+	background: var(--border-subtle);
+}
+.action-menu-spinner {
+	width: 12px;
+	height: 12px;
+	border: 2px solid var(--border-default);
+	border-top-color: var(--primary);
+	border-radius: 50%;
+	animation: spin 0.7s linear infinite;
+}
+
 /* ─── Pressed and keyboard-focus states (one rule per control kind) ─── */
 /* Rows, tabs and list items press into the existing --bg-active surface. */
 .request-item:active,
 .history-item:active,
-.dropdown-item:active,
 .sidebar-tab:active,
 .tab-btn:active,
 .snippet-lang-btn:active,
@@ -2846,7 +2923,7 @@ mark.search-match-current {
 /* Clickable rows that aren't <button>s get the same focus ring as buttons. */
 .collection-header:focus-visible,
 .env-list-item:focus-visible {
-	outline: 2px solid var(--brand);
+	outline: 2px solid var(--primary);
 	outline-offset: -2px;
 }
 

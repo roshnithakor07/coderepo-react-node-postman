@@ -1,46 +1,37 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { statusClass } from "../../shared/utils/format.js";
+import { ActionMenu } from "../../shared/components/ActionMenu.jsx";
+import { CloneIcon, ClipboardIcon, PencilIcon, TrashIcon } from "../../shared/components/icons.jsx";
 
-// Rename / Delete menu shared by collections and saved requests.
-function ItemMenu({ onRename, onDelete, onClose }) {
+// A ⋯ button that opens an ActionMenu (same look for collections and saved
+// requests). ArrowDown on the button also opens it, as in a native menu button.
+function MenuButton({ className, label, items }) {
+	const [open, setOpen] = useState(false);
 	const ref = useRef(null);
-	useEffect(() => {
-		const handler = (e) => {
-			if (ref.current && !ref.current.contains(e.target)) onClose();
-		};
-		const onKey = (e) => {
-			if (e.key === "Escape") onClose();
-		};
-		document.addEventListener("mousedown", handler);
-		document.addEventListener("keydown", onKey);
-		return () => {
-			document.removeEventListener("mousedown", handler);
-			document.removeEventListener("keydown", onKey);
-		};
-	}, [onClose]);
 	return (
-		<div className="dropdown-menu" ref={ref} role="menu">
+		<>
 			<button
-				className="dropdown-item"
-				role="menuitem"
-				onClick={() => {
-					onRename();
-					onClose();
+				ref={ref}
+				className={className}
+				onClick={(e) => {
+					e.stopPropagation();
+					setOpen((o) => !o);
 				}}
-			>
-				✏ Rename
-			</button>
-			<button
-				className="dropdown-item danger"
-				role="menuitem"
-				onClick={() => {
-					onDelete();
-					onClose();
+				onKeyDown={(e) => {
+					if (e.key === "ArrowDown" && !open) {
+						e.preventDefault();
+						e.stopPropagation();
+						setOpen(true);
+					}
 				}}
+				aria-label={label}
+				aria-haspopup="menu"
+				aria-expanded={open}
 			>
-				🗑 Delete
+				⋯
 			</button>
-		</div>
+			{open && <ActionMenu anchorRef={ref} items={items} label={label} onClose={() => setOpen(false)} />}
+		</>
 	);
 }
 
@@ -114,11 +105,11 @@ function CollectionItem({
 	onRenameCollection,
 	onDeleteCollection,
 	onRenameRequest,
+	onDuplicateRequest,
+	onCopyRequestUrl,
 	onDeleteRequest,
 }) {
 	const [open, setOpen] = useState(defaultOpen);
-	const [menuOpen, setMenuOpen] = useState(false);
-	const [requestMenuId, setRequestMenuId] = useState(null);
 	const [renamingRequestId, setRenamingRequestId] = useState(null);
 	const requests = collection.requests || [];
 
@@ -131,7 +122,8 @@ function CollectionItem({
 					tabIndex={0}
 					onClick={() => setOpen((o) => !o)}
 					onKeyDown={(e) => {
-						if (e.key === "Enter" || e.key === " ") {
+						// Only the header itself — keys on its ⋯ button or menu are theirs.
+						if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
 							e.preventDefault();
 							setOpen((o) => !o);
 						}
@@ -143,26 +135,22 @@ function CollectionItem({
 					<span className="collection-name" title={collection.name}>
 						{collection.name}
 					</span>
-					<button
+					<MenuButton
 						className="collection-menu-btn"
-						onClick={(e) => {
-							e.stopPropagation();
-							setMenuOpen((m) => !m);
-						}}
-						aria-label={`Options for ${collection.name}`}
-						aria-haspopup="menu"
-						aria-expanded={menuOpen}
-					>
-						⋯
-					</button>
-				</div>
-				{menuOpen && (
-					<ItemMenu
-						onRename={() => onRenameCollection(collection)}
-						onDelete={() => onDeleteCollection(collection)}
-						onClose={() => setMenuOpen(false)}
+						label={`Options for ${collection.name}`}
+						items={[
+							{ id: "rename", label: "Rename", icon: <PencilIcon />, onSelect: () => onRenameCollection(collection) },
+							{ divider: true },
+							{
+								id: "delete",
+								label: "Delete",
+								icon: <TrashIcon />,
+								danger: true,
+								onSelect: () => onDeleteCollection(collection),
+							},
+						]}
 					/>
-				)}
+				</div>
 			</div>
 			{open && (
 				<div className="collection-requests">
@@ -193,22 +181,40 @@ function CollectionItem({
 										)}
 									</button>
 									<div className="menu-anchor">
-										<button
+										<MenuButton
 											className="request-menu-btn"
-											onClick={() => setRequestMenuId((id) => (id === req._id ? null : req._id))}
-											aria-label={`Options for ${req.name}`}
-											aria-haspopup="menu"
-											aria-expanded={requestMenuId === req._id}
-										>
-											⋯
-										</button>
-										{requestMenuId === req._id && (
-											<ItemMenu
-												onRename={() => setRenamingRequestId(req._id)}
-												onDelete={() => onDeleteRequest(req)}
-												onClose={() => setRequestMenuId(null)}
-											/>
-										)}
+											label={`Options for ${req.name}`}
+											items={[
+												{
+													id: "clone",
+													label: "Clone",
+													busyLabel: "Cloning…",
+													icon: <CloneIcon />,
+													async: true,
+													onSelect: () => onDuplicateRequest(req),
+												},
+												{
+													id: "copy",
+													label: "Copy",
+													icon: <ClipboardIcon />,
+													onSelect: () => onCopyRequestUrl(req),
+												},
+												{
+													id: "rename",
+													label: "Rename",
+													icon: <PencilIcon />,
+													onSelect: () => setRenamingRequestId(req._id),
+												},
+												{ divider: true },
+												{
+													id: "delete",
+													label: "Delete",
+													icon: <TrashIcon />,
+													danger: true,
+													onSelect: () => onDeleteRequest(req),
+												},
+											]}
+										/>
 									</div>
 								</div>
 							),
@@ -233,6 +239,8 @@ export function Sidebar({
 	onRenameCollection,
 	onDeleteCollection,
 	onRenameRequest,
+	onDuplicateRequest,
+	onCopyRequestUrl,
 	onDeleteRequest,
 	onClearHistory,
 	onSelectHistory,
@@ -342,6 +350,8 @@ export function Sidebar({
 										onRenameCollection={startRename}
 										onDeleteCollection={onDeleteCollection}
 										onRenameRequest={onRenameRequest}
+										onDuplicateRequest={onDuplicateRequest}
+										onCopyRequestUrl={onCopyRequestUrl}
 										onDeleteRequest={onDeleteRequest}
 									/>
 								),

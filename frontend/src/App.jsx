@@ -17,7 +17,10 @@ import { ConfirmDialog } from "./shared/components/ConfirmDialog.jsx";
 import { ToastStack, useToasts } from "./shared/components/Toasts.jsx";
 import {
 	addSavedRequest,
+	buildDuplicatePayload,
 	findSavedRequest,
+	insertSavedRequestInOrder,
+	nextCopyName,
 	isSavedRequestDirty,
 	removeSavedRequest,
 	replaceSavedRequest,
@@ -90,6 +93,9 @@ export function PostmanWorkspace({ account, onLogout }) {
 	const [confirmDialog, setConfirmDialog] = useState(null);
 	const [savingRequest, setSavingRequest] = useState(false);
 	const { toasts, notify, dismiss } = useToasts();
+	// Saved requests with a duplicate in flight — a second request for the same
+	// one is ignored, so a double click can't create two copies.
+	const duplicatingRef = useRef(new Set());
 	// Request pane height in px; null until the first layout, when it's set to
 	// the pane's natural height (see the layout effect below).
 	const [requestPaneHeight, setRequestPaneHeight] = useState(null);
@@ -250,6 +256,41 @@ export function PostmanWorkspace({ account, onLogout }) {
 		} catch (e) {
 			notify("error", `Couldn’t rename “${req.name}”: ${e.message}`);
 			return false;
+		}
+	}
+
+	// Duplicates from the stored version (not unsaved builder edits) through the
+	// existing create route, then loads the copy. On failure nothing changes.
+	async function handleDuplicateRequest(req) {
+		if (duplicatingRef.current.has(req._id)) return;
+		duplicatingRef.current.add(req._id);
+		try {
+			const collection = collections.find((c) => (c.requests || []).some((r) => r._id === req._id));
+			if (!collection) throw new Error("The request is no longer in a collection.");
+			const name = nextCopyName(
+				req.name,
+				(collection.requests || []).map((r) => r.name),
+			);
+			const created = await collectionApi.createRequest(collection._id, buildDuplicatePayload(req, name));
+			setCollections((prev) => insertSavedRequestInOrder(prev, collection._id, created));
+			handleSelectRequest(created);
+			notify("success", `Cloned as “${created.name}”`);
+		} catch (e) {
+			notify("error", `Couldn’t clone “${req.name}”: ${e.message}`);
+		} finally {
+			duplicatingRef.current.delete(req._id);
+		}
+	}
+
+	// Copies the URL exactly as saved — {{variables}} stay unresolved. The
+	// Clipboard API can be missing (non-secure context) or refused; both land
+	// in the error toast.
+	async function handleCopyRequestUrl(req) {
+		try {
+			await navigator.clipboard.writeText(req.url || "");
+			notify("success", "URL copied");
+		} catch {
+			notify("error", "Couldn’t copy the URL — clipboard access was blocked.");
 		}
 	}
 
@@ -520,6 +561,8 @@ export function PostmanWorkspace({ account, onLogout }) {
 				onRenameCollection={handleRenameCollection}
 				onDeleteCollection={handleDeleteCollection}
 				onRenameRequest={handleRenameRequest}
+				onDuplicateRequest={handleDuplicateRequest}
+				onCopyRequestUrl={handleCopyRequestUrl}
 				onDeleteRequest={handleDeleteRequest}
 				onClearHistory={handleClearHistory}
 				onSelectHistory={handleSelectHistory}

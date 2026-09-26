@@ -6,6 +6,9 @@ import {
 	replaceSavedRequest,
 	removeSavedRequest,
 	addSavedRequest,
+	nextCopyName,
+	buildDuplicatePayload,
+	insertSavedRequestInOrder,
 } from "./savedRequest.js";
 
 const saved = {
@@ -83,5 +86,83 @@ describe("collection list helpers", () => {
 		expect(removeSavedRequest(collections, "r1")[0].requests.map((r) => r._id)).toEqual(["r2"]);
 		expect(addSavedRequest(collections, "c2", { _id: "r3" })[1].requests).toEqual([{ _id: "r3" }]);
 		expect(collections[1].requests).toEqual([]);
+	});
+});
+
+describe("nextCopyName", () => {
+	test('first duplicate is "<name> Copy"', () => {
+		expect(nextCopyName("Users", ["Users"])).toBe("Users Copy");
+	});
+	test('then "Copy 2", "Copy 3"… skipping names already taken', () => {
+		expect(nextCopyName("Users", ["Users", "Users Copy"])).toBe("Users Copy 2");
+		expect(nextCopyName("Users", ["Users", "Users Copy", "Users Copy 2", "Users Copy 3"])).toBe("Users Copy 4");
+		expect(nextCopyName("Users", ["Users", "Users Copy", "Users Copy 3"])).toBe("Users Copy 2");
+	});
+	test("only exact names count (no false matches on prefixes)", () => {
+		expect(nextCopyName("Users", ["Users", "Users Copyright"])).toBe("Users Copy");
+	});
+});
+
+describe("buildDuplicatePayload", () => {
+	const original = {
+		_id: "r1",
+		accountId: "a1",
+		collectionId: "c1",
+		createdAt: "2026-09-26T00:00:00Z",
+		updatedAt: "2026-09-26T00:00:00Z",
+		sortOrder: 3,
+		name: "Users",
+		description: "Lists users",
+		method: "POST",
+		url: "http://localhost/users",
+		params: [
+			{ key: "page", value: "1", enabled: true, description: "1-based" },
+			{ key: "debug", value: "1", enabled: false },
+		],
+		headers: [{ key: "X-Trace", value: "abc", enabled: false, description: "logs" }],
+		body: '{"a":1}',
+		bodyType: "json",
+		auth: { type: "bearer", token: "{{token}}" },
+	};
+	test("copies every saved field, including disabled rows and descriptions", () => {
+		const payload = buildDuplicatePayload(original, "Users Copy");
+		expect(payload).toEqual({
+			name: "Users Copy",
+			description: "Lists users",
+			method: "POST",
+			url: "http://localhost/users",
+			params: original.params,
+			headers: original.headers,
+			body: '{"a":1}',
+			bodyType: "json",
+			auth: { type: "bearer", token: "{{token}}" },
+		});
+	});
+	test("leaves out server-owned fields and doesn't share row objects with the original", () => {
+		const payload = buildDuplicatePayload(original, "Users Copy");
+		for (const key of ["_id", "accountId", "collectionId", "createdAt", "updatedAt", "sortOrder"])
+			expect(payload).not.toHaveProperty(key);
+		payload.params[0].value = "changed";
+		payload.auth.token = "changed";
+		expect(original.params[0].value).toBe("1");
+		expect(original.auth.token).toBe("{{token}}");
+	});
+});
+
+describe("insertSavedRequestInOrder", () => {
+	test("places a new request where the server's sort (sortOrder asc, newest first) would", () => {
+		const collections = [
+			{
+				_id: "c1",
+				requests: [
+					{ _id: "a", sortOrder: 0, createdAt: "2026-09-26T10:00:00Z" },
+					{ _id: "b", sortOrder: 1, createdAt: "2026-09-20T00:00:00Z" },
+					{ _id: "c", sortOrder: 2, createdAt: "2026-09-20T00:00:00Z" },
+				],
+			},
+		];
+		const created = { _id: "new", sortOrder: 0, createdAt: "2026-09-26T12:00:00Z" };
+		expect(insertSavedRequestInOrder(collections, "c1", created)[0].requests.map((r) => r._id)).toEqual(["new", "a", "b", "c"]);
+		expect(collections[0].requests).toHaveLength(3);
 	});
 });

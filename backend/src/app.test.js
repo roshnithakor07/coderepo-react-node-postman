@@ -291,6 +291,57 @@ describe("saved request update, rename and delete; history entry delete (live HT
 		expect(after.variables[0].value).toBe("http://b");
 	});
 
+	test("duplicating through the existing create route copies every field under a new id", async () => {
+		const collection = await newCollection("Duplicate");
+		const original = {
+			name: "Original",
+			description: "Request notes",
+			method: "PATCH",
+			url: "http://localhost/items/{{id}}",
+			params: [
+				{ key: "page", value: "2", enabled: true, description: "1-based" },
+				{ key: "debug", value: "1", enabled: false },
+			],
+			headers: [{ key: "X-Trace", value: "abc", enabled: false, description: "logs" }],
+			body: '{"a":1}',
+			bodyType: "json",
+			auth: { type: "basic", username: "u", password: "p" },
+		};
+		const first = (await (await authed(`/collections/${collection._id}/requests`, json("POST", original))).json()).data;
+		// What the UI sends for "Duplicate": the stored fields with the next free name.
+		const copy = await authed(`/collections/${collection._id}/requests`, json("POST", { ...original, name: "Original Copy" }));
+		expect(copy.status).toBe(201);
+		const created = (await copy.json()).data;
+		expect(created._id).not.toBe(first._id);
+		const pick = ({ description, method, url, params, headers, body, bodyType, auth }) => ({
+			description,
+			method,
+			url,
+			params,
+			headers,
+			body,
+			bodyType,
+			auth,
+		});
+		const stored = await requestsIn(collection._id);
+		const storedOriginal = stored.find((r) => r._id === first._id);
+		const storedCopy = stored.find((r) => r._id === created._id);
+		// The copy matches the stored original field for field (including model defaults such as auth.apiKeyIn).
+		expect(pick(storedCopy)).toEqual(pick(storedOriginal));
+		expect(storedCopy.params).toEqual(original.params);
+		expect(storedCopy.headers).toEqual(original.headers);
+		expect((await requestsIn(collection._id)).map((r) => r.name).sort()).toEqual(["Original", "Original Copy"]);
+	});
+
+	test("a duplicate into a collection that no longer exists fails with 404 and creates nothing", async () => {
+		const collection = await newCollection("Gone");
+		await authed(`/collections/${collection._id}`, { method: "DELETE" });
+		const response = await authed(`/collections/${collection._id}/requests`, json("POST", { name: "Orphan Copy" }));
+		expect(response.status).toBe(404);
+		const all = (await (await authed("/collections")).json()).data.flatMap((c) => c.requests);
+		expect(all.some((r) => r.name === "Orphan Copy")).toBe(false);
+	});
+
 	test("the removed per-collection request listing route no longer exists", async () => {
 		const collection = await newCollection("Removed route");
 		expect((await authed(`/collections/${collection._id}/requests`)).status).toBe(404);
