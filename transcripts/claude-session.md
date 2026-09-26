@@ -3957,3 +3957,48 @@ The default pane on load (229px) is above the first threshold.
   - The browser logs the deliberate wrong-password 401 to the console (inherent).
 
 **Passed:** everything else. Clean install (exit 0, 4s) with seed counts matching the README; build; 79/79 tests; health reports the DB; auth, reads, the full create/update/read/delete cycle, errors and ownership (404); start-time reseed; no secrets or `.env` in history; `.env` files ignored; archive 1.32 MB with the correct export rules; Prettier-clean source; no frontend console logging; American English; offline-safe seed data; the reviewer click-through (login, seeded collections, send, environments, history, snippets, save, second account, 400px).
+
+---
+
+## 2026-09-26 — fix/review-blockers — B1: every backend route reachable from the UI
+
+**Status:** Awaiting approval.
+
+**Task (from the audit, B1, "add the missing UI" option):** saved-request menu with Rename and Delete (confirm); Save on an already-saved request updates it (PUT) with no duplicate, and the loaded saved request is shown with an unsaved-changes indicator; a hover-revealed delete per history entry (no confirm, immediate update); loading/error states and toasts; remove only `GET /collections/:id/requests` and its unused client method; tests; S15 and S16 must pass. The branch is based on `chore/submission-audit`, so the audit's transcript entry travels with it.
+
+**What changed:**
+- **Saved requests.**
+  - The Save button now updates the loaded saved request in place (PUT, same id, no duplicate), or opens the save dialog when nothing saved is loaded.
+  - A request created through the dialog becomes the loaded one.
+  - The loaded request shows as "Collection › Name" on the right of the Params/Auth/Headers/Body tab row, with an "Unsaved changes" dot (also on its sidebar item) and a "Save as new…" action. Putting it in the tab row, rather than a bar above the URL, keeps the request pane height unchanged, so the no-cut-row default from the last round still holds (verified: 229px before and after loading).
+  - Each saved request has a hover/focus-revealed "⋯" menu with Rename (inline, stays open on failure) and Delete (confirm dialog; the builder keeps its contents but is unlinked).
+- **History:** each entry gets a hover/focus-revealed × button. No confirm: the row disappears immediately and is restored in place if the server refuses.
+- **Toasts:** a small self-written toast stack (`shared/components/Toasts.jsx`). Success clears after 3s, errors after 6s, and each can be dismissed; errors use `role="alert"`. Every new action reports success or failure. Save shows "Saving…" while pending.
+- **Keyboard access:** the collection "⋯" button now uses the same reveal pattern (opacity, visible on hover/focus-within/open, always on touch) instead of `display: none`, which had made it unreachable by keyboard.
+- **Removed:** `GET /collections/:id/requests` (route, controller, dead `getRequests` service method) and `collectionApi.listRequests`. The collection list already embeds each collection's requests.
+- **Pure helpers with tests:** `features/collections/savedRequest.js` (saveable fields, the unsaved-changes check by value, immutable list updates).
+
+**Pre-existing bug found and fixed (outside the literal B1 scope, same root cause):** all three update endpoints (`PUT /collections/:id`, `PUT /requests/:id`, `PUT /environments/:id`) validated with `schema.partial()`, and zod still applies each field's `.default()` when the field is missing. So:
+- a rename carrying only `{ name }` would have wiped a saved request's URL, params, headers, body and auth (caught by the new rename test on its first run);
+- renaming a collection has been resetting its description to "";
+- **saving an environment in the Environments modal (which sends `{ name, variables }`) has been silently deactivating the active environment**, so `{{variables}}` stopped resolving.
+
+Fixed with `shared/utils/update-schema.js#updateSchemaFrom(schema)`: every field optional with its default removed, still strict and still validated. Regression tests cover all three.
+
+**Mistakes along the way (tests, not the app):**
+- The first click-test run couldn't find the test request: the newest collection is listed first and starts expanded, and my click collapsed it.
+- The second run stopped at the rename-success step because clearing the error toast moved focus out of the rename input.
+
+Both runs left their test collection behind; it was deleted each time, and cleanup now runs in a `finally` block.
+
+**Real UI bug caught by the click-test:** the saved-request "⋯" menu opened underneath the next collection's header. The row action was centred with `transform: translateY(-50%)`, which creates a stacking context and traps the dropdown's `z-index`. Replaced with `top: 0; bottom: 0; margin: auto` (no transform).
+
+**Verification:**
+- **Tests:** 93/93 (14 new):
+  - backend: update in place with no duplicate, rename keeps other fields (and an empty name is rejected), delete then a 404 on repeat, another account can't delete (404) a saved request or a history entry, single history delete, the removed route returns 404, collection rename keeps the description, saving an active environment keeps it active;
+  - frontend: 7 `savedRequest` tests.
+- **Build and formatting:** the build, `git diff --check` and Prettier on the changed files pass.
+- **Validator S15/S16 re-check:** 21 backend product routes, 21 API-client methods, each with a UI caller (was 4 unreachable routes).
+- **Browser click-tests:**
+  - new flows 15/15: Save on an unsaved request opens the dialog; loaded context shown; unchanged pane height; unsaved indicator appears, clears on save and on typing the value back; PUT with no POST and no duplicate; Save as new; menu reveal by hover and Tab; rename error (toast, form kept) and success; delete with confirm; history delete failure (restored in place) and success (gone server-side); no unexpected console errors;
+  - regressions: KV editor 23/23, split 52/52, reviewer walkthrough 15/15 (updated for the new Save behavior: Save on the loaded seeded request sends a PUT and shows a toast, and "Save as new…" opens the dialog).

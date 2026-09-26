@@ -166,3 +166,14 @@ Branch `feature/response-viewer-polish` added four things to the Pretty tab: JSO
 ## Submission audit method (branch `chore/submission-audit`)
 
 - **The fresh-clone test used a disposable database instead of the live one.** `bun start`'s `prestart` always wipes and re-seeds, and the validator forbids stopping processes the audit didn't start or touching the live database. So the clone got a pre-created `backend/.env` (disposable `postman_db_audit_*`, backend port 8100), recorded as the one deviation from the README flow. The full `bun start` on 3000/8000 is left as MANUAL until the ports can be freed with the user's approval.
+
+## Review blockers: saved-request editing, history delete, partial updates (branch `fix/review-blockers`)
+
+- **Every public route gets a real UI consumer, or goes.** The validator's backend-integration check (S15) fails routes that only the API can reach. Update and delete for saved requests and per-entry history delete got UI. `GET /collections/:id/requests` was removed rather than wired in, because the collection list already embeds each collection's requests.
+- **Save means "update what's loaded".** It matches Postman and avoids duplicates. The loaded request is always visible (tab row, sidebar dot), and "Save as new…" is the explicit escape hatch for making a copy.
+- **The loaded-request indicator lives in the tab row,** not in a new bar, so loading a saved request never changes the request pane's height (the default split was just tuned to never cut a row).
+- **Unsaved changes are compared by value** over exactly the fields Save writes (normalized rows), so typing a value back reads as clean.
+- **History delete is optimistic without confirm** (the user's call). The row is removed immediately and restored in place if the server refuses. Saved-request delete keeps a confirm, since saved work is costlier to lose.
+- **Toasts are self-written** (a hook plus a stack), with no dependency (GUIDELINES §2.2).
+- **Partial updates never apply defaults.** `updateSchemaFrom(schema)` derives the update schema from the create schema with defaults stripped, fixing silent data loss on rename (saved requests, collection descriptions) and the Environments modal deactivating the active environment on every save.
+- **Row actions avoid CSS transforms,** because a transform creates a stacking context that traps a dropdown's z-index under later sidebar content.
