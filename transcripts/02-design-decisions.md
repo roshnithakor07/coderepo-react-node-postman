@@ -154,3 +154,10 @@ Branch `feature/response-viewer-polish` added four things to the Pretty tab: JSO
 - **Delete button visibility is CSS-only** (`opacity` with `:hover`/`:focus-within`, always visible under `(hover: none)`), so it stays in the tab order and is revealed by keyboard focus. It's scoped to `.kv-editor` because the Environments modal shares `.kv-del-btn`.
 - **Pane minimums are pixels derived from measured component heights** (request 200px, response 180px). The CSS minimums use `min(Npx, 45%)` so a very short window still fits both panes, and the splitter drag falls back to proportional minimums in that case.
 - No new dependencies (GUIDELINES §2.2); everything is self-written.
+
+### Key-value editor, round 2: measured split and shrink-first bulk layout
+
+- **The split is a pixel height with a measured default, not a percentage.** A percentage can leave a row cut at any window height. Rendering the request pane at its natural height on first layout (header + one empty row + panel padding) and fixing it in a layout effect guarantees a clean default at every window height, with no flash.
+- **Divider limits are measured from the live layout** (bottom of the request tab bar, bottom of the response header bar) instead of pixel constants. This restores the pre-change, Postman-like range while staying correct when the request bar wraps on narrow screens. Constants would drift from the CSS.
+- **Dragging uses the grab offset** (height at grab + pointer delta), so the divider never jumps when grabbed and tracks the pointer 1:1 in both directions.
+- **Bulk edit is shrink-first:** the toggle and hint have priority over the textarea's size. A sticky-positioning attempt failed at very small panes, so the textarea now yields first. The textarea gets 3+ lines whenever the pane allows it (≥ ~245px), toggle and hint are guaranteed from ~190px, and below that the panel scrolls, since a textarea can't shrink past its own 22px frame.
