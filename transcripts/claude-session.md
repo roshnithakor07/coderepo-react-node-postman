@@ -4051,3 +4051,70 @@ Re-running the sweep reports no gaps across all 40 kinds.
   - no console errors.
 - Regressions: new flows 15/15, KV editor 23/23, reviewer walkthrough 15/15.
 - No test data left behind.
+
+### Update — blue focus rings, Clone/Copy, redesigned ⋯ menu (not yet approved)
+
+**Requests in this round (several mid-turn messages, in order):**
+1. Make button focus outlines blue to match inputs.
+2. Add Duplicate to the saved-request ⋯ menu:
+   - copy every field under the name "<name> Copy" / "Copy 2"…;
+   - place it directly below the original (propose the smallest backend change and ask first if needed);
+   - load the copy with a toast, a loading state and a double-click guard;
+   - tests.
+3. Add Copy URL: the saved URL with `{{variables}}` unresolved, a "URL copied" toast, and an error toast if the clipboard fails.
+4. Rename the items to **Clone** and **Copy** and order the menu Clone, Copy, Rename, Delete.
+5. Restyle the menu:
+   - hand-drawn 16px stroke icons; 36px rows; hover styling; a divider; red Delete; the specified tokens and sizes;
+   - arrow keys, Enter, Esc returning focus to ⋯, and click-outside;
+   - never clipped, flipping upward near the bottom;
+   - the same component for the collection menu.
+6. A reference screenshot of the target menu.
+7. A screenshot pointing out a Delete issue.
+
+**Focus rings:**
+- **One color:** every keyboard focus ring is now `2px solid var(--primary)`, like inputs. Before, button focus used `--brand`, and four response-viewer controls used `--focus-border`. The history "Load more" button had only a faint `--primary-dim` glow.
+- **A flash found by the click-test:** controls with `transition: all` (Save, Send, Environments rows) animated the outline from the browser's default thick, text-colored ring, so for about 100ms a white/gray ring showed before turning blue. Buttons and `role="button"` elements now rest with `outline: 2px solid transparent`, so the ring fades in from transparent blue instead.
+
+**Clone (formerly "Duplicate"):**
+- Clones from the stored version, not unsaved builder edits, through the existing `POST /collections/:id/requests`.
+- Copies every field: method, URL, params and headers including disabled rows and descriptions, body, body type, auth and the request description.
+- Named with `nextCopyName` ("<name> Copy", then "Copy 2", "Copy 3"…, checked against names in the same collection).
+- On success it loads the copy with a "Cloned as …" toast; on failure it shows an error toast and nothing changes.
+- A per-request in-flight set plus the menu's busy state prevent a second copy.
+- It's inserted locally with the server's own sort rule (`insertSavedRequestInOrder`), so the sidebar never jumps on reload.
+
+**Placement "directly below the original" is not done yet, pending the user's go-ahead.** The backend already has a `sortOrder` field (model, index and list sort), but the create route's strict schema doesn't accept it, and every new request gets `sortOrder: 0`, ordered newest-first among equals. So today a clone appears where new requests appear, at the top of that ordering. The smallest change is proposed to the user (see the chat and log): an optional `afterRequestId` on the existing create route, with no new route.
+
+**Copy:** `navigator.clipboard.writeText(req.url)`. A missing or refused Clipboard API lands in the error toast.
+
+**Menu redesign:**
+- New shared `ActionMenu` component, used for both the saved-request menu (Clone, Copy, Rename | Delete) and the collection menu (Rename | Delete).
+- It's rendered into `document.body` with fixed positioning, because the sidebar's `overflow-x: hidden` scroll area would otherwise always clip an absolutely positioned menu.
+- Placement comes from a pure, tested `computeMenuPosition`: below the ⋯ button, flipping above when there's no room, clamped inside the viewport.
+- After the reference screenshot, the menu's **left** edge aligns with the ⋯ button, so it extends right over the workspace instead of back over the sidebar list.
+- Keyboard: focus starts on the first item; ↑/↓/Home/End wrap and skip disabled items (pure, tested `nextEnabledIndex`); Enter selects; Esc closes and returns focus to ⋯; Tab closes; ArrowDown on ⋯ opens it.
+- Mouse: click-outside closes, and the menu re-positions on scroll and resize.
+- Async items (Clone) keep the menu open and disabled until they finish ("Cloning…" with a spinner).
+- The icons are hand-drawn SVGs using `currentColor` (`shared/components/icons.jsx`).
+- The row whose menu is open stays highlighted (as in the reference).
+- The old `ItemMenu` component and all `.dropdown-*` CSS were removed as dead code.
+
+**Bugs found and fixed along the way:**
+1. **Portal click-through:** React events bubble through the component tree even from a portal, so a click in the collection menu would have toggled the collection. The menu root stops click propagation.
+2. **Enter on ⋯ collapsed the collection:** the collection header's Enter/Space handler also fired for key presses on its inner ⋯ button (a latent bug). It now only acts when the header itself is focused.
+3. **Delete icon lost its red on hover (the user's screenshot):** the general hover rule (`.action-menu-item:hover:not(:disabled) .action-menu-icon`) outranked the danger rule. Delete now stays `--danger` for both icon and label in every state. My hover test had only checked the first item, so it now also checks the hovered and keyboard-focused Delete.
+
+**Test-harness issues (not app bugs):**
+- a substring row locator that picked "Dup source Copy" instead of the original;
+- focus-ring colors read mid-transition, now waiting, and comparing only the color channels for the fade's alpha;
+- a missing import in the helper tests.
+
+**Verification:**
+- **Tests:** 107/107 (new since the last push: `nextCopyName`, `buildDuplicatePayload` and `insertSavedRequestInOrder` in `savedRequest.test.js`; `computeMenuPosition` and `nextEnabledIndex` in `actionMenu.test.js`; 2 backend clone tests: identical fields under a new id, and 404 with nothing created for a missing collection).
+- **Validator:** S15/S16 pass (21 routes, 21 client methods, all with UI callers, no new routes).
+- **Build and formatting:** the build, Prettier and `git diff --check` pass.
+- **Click-tests:**
+  - menu 18/18: items and divider, 36px rows / 8px 12px padding / 10px gap / 16px icons, 200px menu with tokens, colors, left-aligned below near the top, flips above near the bottom, fully on screen and uncovered at its corners, hover brightening, Delete red on hover and focus, click-outside, the collection menu identical, no accidental toggle, the full keyboard flow;
+  - clone and copy 14/14;
+  - states 18/18, blockers 15/15, KV editor 23/23, split 52/52, reviewer walkthrough 15/15.
+- No test data left behind.

@@ -184,3 +184,12 @@ Branch `feature/response-viewer-polish` added four things to the Pretty tab: JSO
 - **One rename component for collections and saved requests,** so the two forms can't drift apart: disabled when there's nothing to save, a saving state that locks the form, Enter/Esc, and keep-open-on-failure.
 - **Pressed states follow one rule per control kind** with existing tokens (`--bg-active` for rows/tabs, a slight scale for icon buttons, a 1px press for text buttons, as Send already did), instead of per-button one-offs.
 - **Clickable non-button rows get `role="button"`, `tabIndex` and Enter/Space,** plus the same focus ring as buttons. The Environments list was mouse-only before.
+
+### ⋯ menu, Clone/Copy, focus color (branch `fix/review-blockers`, round 3)
+
+- **One focus color, `--primary`,** for every keyboard focus ring, matching inputs. A transparent resting outline on buttons prevents `transition: all` from flashing the browser's default ring.
+- **The menu renders in a portal with fixed positioning,** because the sidebar is a clipping scroll container and any in-flow dropdown would be cut off at its edge or covered by later rows. Placement is a pure function (below, flip above, clamp to viewport), aligned with the trigger's left edge so the menu covers the workspace rather than the list it acts on.
+- **One component for both ⋯ menus,** so collection and request menus can't drift apart visually or in keyboard behavior.
+- **Clone copies the stored request,** not unsaved builder edits, and uses the existing create route. It's inserted locally with the server's sort rule, so the list doesn't jump on reload.
+- **"Directly below the original" needs the create route to accept a position.** The model already has `sortOrder`, but the route can't set it, and user-created requests all share `sortOrder: 0`. Proposed an optional `afterRequestId` on the existing route (no new route), pending the user's approval.
+- **Destructive menu items keep `--danger` in every state,** icon included.
