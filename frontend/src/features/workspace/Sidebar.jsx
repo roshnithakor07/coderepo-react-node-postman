@@ -49,29 +49,56 @@ function ItemMenu({ onRename, onDelete, onClose }) {
 function InlineRename({ initial, onSubmit, onCancel, label }) {
 	const [value, setValue] = useState(initial);
 	const [pending, setPending] = useState(false);
+	const name = value.trim();
+	// Nothing to save when the name is empty or unchanged; Enter then does nothing.
+	const canSubmit = !pending && name.length > 0 && name !== initial;
 	async function handleSubmit(e) {
 		e.preventDefault();
-		const name = value.trim();
-		if (!name || name === initial) return onCancel();
+		if (!canSubmit) return;
 		setPending(true);
 		const ok = await onSubmit(name);
 		setPending(false);
 		if (ok) onCancel();
 	}
 	return (
-		<form className="inline-form" onSubmit={handleSubmit} onKeyDown={(e) => e.key === "Escape" && onCancel()}>
+		<form
+			className="inline-form"
+			onSubmit={handleSubmit}
+			onKeyDown={(e) => {
+				if (e.key === "Escape" && !pending) {
+					e.preventDefault();
+					e.stopPropagation();
+					onCancel();
+				}
+			}}
+		>
 			<input
 				className="inline-input"
 				value={value}
 				onChange={(e) => setValue(e.target.value)}
+				onFocus={(e) => e.target.select()}
 				autoFocus
 				disabled={pending}
 				aria-label={label}
 			/>
-			<button className="inline-btn inline-btn-ok" type="submit" disabled={pending || !value.trim()} aria-label="Save name">
-				{pending ? "…" : "✓"}
+			<button
+				className={`inline-btn inline-btn-ok${pending ? " is-saving" : ""}`}
+				type="submit"
+				disabled={!canSubmit}
+				aria-label={pending ? "Saving name" : "Save name"}
+				aria-busy={pending}
+				title={pending ? "Saving…" : "Save name (Enter)"}
+			>
+				{pending ? <span className="inline-btn-spinner" aria-hidden="true" /> : "✓"}
 			</button>
-			<button className="inline-btn inline-btn-cancel" type="button" onClick={onCancel} disabled={pending} aria-label="Cancel rename">
+			<button
+				className="inline-btn inline-btn-cancel"
+				type="button"
+				onClick={onCancel}
+				disabled={pending}
+				aria-label="Cancel rename"
+				title="Cancel (Esc)"
+			>
 				✕
 			</button>
 		</form>
@@ -216,7 +243,6 @@ export function Sidebar({
 	const [showNew, setShowNew] = useState(false);
 	const [newName, setNewName] = useState("");
 	const [renaming, setRenaming] = useState(null);
-	const [renameName, setRenameName] = useState("");
 	const [saving, setSaving] = useState(false);
 
 	async function handleCreate(e) {
@@ -232,17 +258,8 @@ export function Sidebar({
 		}
 	}
 
-	async function handleRename(e) {
-		e.preventDefault();
-		if (!renameName.trim()) return setRenaming(null);
-		await onRenameCollection(renaming._id, renameName.trim());
-		setRenaming(null);
-		setRenameName("");
-	}
-
 	function startRename(col) {
 		setRenaming(col);
-		setRenameName(col.name);
 	}
 
 	return (
@@ -307,20 +324,13 @@ export function Sidebar({
 
 							{collections.map((col) =>
 								renaming?._id === col._id ? (
-									<form key={col._id} className="inline-form" onSubmit={handleRename}>
-										<input
-											className="inline-input"
-											value={renameName}
-											onChange={(e) => setRenameName(e.target.value)}
-											autoFocus
-										/>
-										<button className="inline-btn inline-btn-ok" type="submit">
-											✓
-										</button>
-										<button className="inline-btn inline-btn-cancel" type="button" onClick={() => setRenaming(null)}>
-											✕
-										</button>
-									</form>
+									<InlineRename
+										key={col._id}
+										initial={col.name}
+										label={`Rename ${col.name}`}
+										onSubmit={(name) => onRenameCollection(col._id, name)}
+										onCancel={() => setRenaming(null)}
+									/>
 								) : (
 									<CollectionItem
 										key={col._id}

@@ -1009,22 +1009,56 @@ textarea:focus-visible {
 	display: grid;
 	place-items: center;
 	padding: 0;
+	transition:
+		background var(--t-fast) var(--ease),
+		color var(--t-fast) var(--ease),
+		border-color var(--t-fast) var(--ease),
+		transform var(--t-fast) var(--ease);
 }
+/* Confirm is an action, so it uses the --primary family (like Send and the
+   dialogs' primary button), not --brand, which marks navigation/active. */
 .inline-btn-ok {
-	background: var(--brand);
+	background: var(--primary);
 	color: #fff;
 }
+.inline-btn-ok:hover:not(:disabled) {
+	background: var(--primary-hover);
+}
+.inline-btn-ok:active:not(:disabled) {
+	background: var(--primary-active);
+}
 .inline-btn-ok:disabled {
-	opacity: 0.4;
+	background: var(--primary-disabled);
+	color: var(--text-tertiary);
 	cursor: not-allowed;
+}
+.inline-btn-ok.is-saving {
+	background: var(--primary);
+	color: #fff;
+	cursor: progress;
+}
+.inline-btn-spinner {
+	width: 12px;
+	height: 12px;
+	border: 2px solid rgba(255, 255, 255, 0.35);
+	border-top-color: #fff;
+	border-radius: 50%;
+	animation: spin 0.7s linear infinite;
 }
 .inline-btn-cancel {
 	border: 1px solid var(--border-default);
 	color: var(--text-secondary);
 }
-.inline-btn-cancel:hover {
+.inline-btn-cancel:hover:not(:disabled) {
 	background: var(--bg-hover);
 	color: var(--text-primary);
+}
+.inline-btn-cancel:active:not(:disabled) {
+	background: var(--bg-active);
+}
+.inline-btn-cancel:disabled {
+	opacity: 0.4;
+	cursor: not-allowed;
 }
 
 /* ─── Workspace ─── */
@@ -2762,6 +2796,58 @@ mark.search-match-current {
 .toast-close:hover {
 	background: var(--bg-hover);
 	color: var(--text-primary);
+}
+
+/* ─── Pressed and keyboard-focus states (one rule per control kind) ─── */
+/* Rows, tabs and list items press into the existing --bg-active surface. */
+.request-item:active,
+.history-item:active,
+.dropdown-item:active,
+.sidebar-tab:active,
+.tab-btn:active,
+.snippet-lang-btn:active,
+.env-list-item:active,
+.collection-header:active,
+.json-collapsed-summary:active {
+	background: var(--bg-active);
+}
+/* Small icon buttons press in slightly. */
+.icon-btn:active:not(:disabled),
+.logout-btn:active:not(:disabled),
+.collection-menu-btn:active,
+.request-menu-btn:active,
+.history-del-btn:active,
+.kv-del-btn:active,
+.modal-close:active,
+.toast-close:active,
+.json-toggle:active,
+.response-search-nav:active:not(:disabled),
+.env-del-btn:active,
+.inline-btn-cancel:active:not(:disabled),
+.service-error button:active {
+	transform: scale(0.94);
+}
+/* Text buttons press down a pixel, like Send. */
+.new-btn:active,
+.history-clear-btn:active,
+.history-load-more-btn:active:not(:disabled),
+.btn-ghost:active:not(:disabled),
+.btn-danger:active:not(:disabled),
+.snippet-copy-btn:active,
+.json-toolbar-btn:active,
+.kv-mode-btn:active,
+.add-row-btn:active,
+.saved-context-saveas:active,
+.save-btn:active:not(:disabled),
+.env-activate-btn:active,
+.inline-btn-ok:active:not(:disabled) {
+	transform: translateY(1px);
+}
+/* Clickable rows that aren't <button>s get the same focus ring as buttons. */
+.collection-header:focus-visible,
+.env-list-item:focus-visible {
+	outline: 2px solid var(--brand);
+	outline-offset: -2px;
 }
 
 /* ─── Responsive ─── */

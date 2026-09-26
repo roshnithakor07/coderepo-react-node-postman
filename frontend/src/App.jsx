@@ -342,9 +342,17 @@ export function PostmanWorkspace({ account, onLogout }) {
 		setCollections((prev) => [...prev, { ...created, requests: [] }]);
 	}
 
+	// Resolves to true on success so the inline rename form knows to close.
 	async function handleRenameCollection(id, name) {
-		const updated = await collectionApi.update(id, { name });
-		setCollections((prev) => prev.map((c) => (c._id === id ? { ...c, name: updated.name } : c)));
+		try {
+			const updated = await collectionApi.update(id, { name });
+			setCollections((prev) => prev.map((c) => (c._id === id ? { ...c, name: updated.name } : c)));
+			notify("success", `Renamed to “${updated.name}”`);
+			return true;
+		} catch (e) {
+			notify("error", `Couldn’t rename the collection: ${e.message}`);
+			return false;
+		}
 	}
 
 	function handleDeleteCollection(collection) {
