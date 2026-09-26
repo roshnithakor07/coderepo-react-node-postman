@@ -14,6 +14,15 @@ import { AppHeader } from "./features/workspace/AppHeader.jsx";
 import { Sidebar } from "./features/workspace/Sidebar.jsx";
 import { hasSessionToken, setSessionToken } from "./shared/api/client.js";
 import { ConfirmDialog } from "./shared/components/ConfirmDialog.jsx";
+import { ToastStack, useToasts } from "./shared/components/Toasts.jsx";
+import {
+	addSavedRequest,
+	findSavedRequest,
+	isSavedRequestDirty,
+	removeSavedRequest,
+	replaceSavedRequest,
+	toSavedFields,
+} from "./features/collections/savedRequest.js";
 
 // How far the request/response divider may travel, read from the live
 // layout (both bars can change height, e.g. the request bar wraps on narrow
@@ -79,6 +88,8 @@ export function PostmanWorkspace({ account, onLogout }) {
 	const [showEnvs, setShowEnvs] = useState(false);
 	const [showSave, setShowSave] = useState(false);
 	const [confirmDialog, setConfirmDialog] = useState(null);
+	const [savingRequest, setSavingRequest] = useState(false);
+	const { toasts, notify, dismiss } = useToasts();
 	// Request pane height in px; null until the first layout, when it's set to
 	// the pane's natural height (see the layout effect below).
 	const [requestPaneHeight, setRequestPaneHeight] = useState(null);
@@ -194,9 +205,91 @@ export function PostmanWorkspace({ account, onLogout }) {
 		return snippetApi.generate({ ...request, language, environmentId: activeEnv?._id });
 	}
 
+	// The saved request currently loaded into the builder (if it still exists)
+	// and whether the builder has diverged from it.
+	const activeSaved = findSavedRequest(collections, activeRequestId);
+	const activeRequestDirty = activeSaved ? isSavedRequestDirty(request, activeSaved.request) : false;
+
+	// "Save as" from the dialog: creates a new saved request, which then becomes
+	// the loaded one, so the next Save updates it instead of duplicating it.
+	// Errors propagate to the dialog, which shows them inline.
 	async function handleSaveRequest(collectionId, data) {
-		await collectionApi.createRequest(collectionId, data);
-		await loadCollections();
+		const created = await collectionApi.createRequest(collectionId, data);
+		setCollections((prev) => addSavedRequest(prev, collectionId, created));
+		setActiveRequestId(created._id);
+		notify("success", `Saved “${created.name}”`);
+	}
+
+	// The Save button: updates the loaded saved request in place (PUT), or
+	// opens the save dialog when nothing saved is loaded.
+	async function handleSaveClick() {
+		if (!activeSaved) {
+			setShowSave(true);
+			return;
+		}
+		if (savingRequest) return;
+		setSavingRequest(true);
+		try {
+			const updated = await collectionApi.updateRequest(activeSaved.request._id, toSavedFields(request));
+			setCollections((prev) => replaceSavedRequest(prev, updated));
+			notify("success", `Saved changes to “${updated.name}”`);
+		} catch (e) {
+			notify("error", `Couldn’t save “${activeSaved.request.name}”: ${e.message}`);
+		} finally {
+			setSavingRequest(false);
+		}
+	}
+
+	// Resolves to true on success so the inline rename form knows to close.
+	async function handleRenameRequest(req, name) {
+		try {
+			const updated = await collectionApi.updateRequest(req._id, { name });
+			setCollections((prev) => replaceSavedRequest(prev, updated));
+			notify("success", `Renamed to “${updated.name}”`);
+			return true;
+		} catch (e) {
+			notify("error", `Couldn’t rename “${req.name}”: ${e.message}`);
+			return false;
+		}
+	}
+
+	function handleDeleteRequest(req) {
+		setConfirmDialog({
+			title: "Delete saved request?",
+			message: `You’re about to permanently delete “${req.name}”. This action cannot be undone.`,
+			confirmLabel: "Delete request",
+			onConfirm: async () => {
+				setConfirmDialog(null);
+				try {
+					await collectionApi.removeRequest(req._id);
+					setCollections((prev) => removeSavedRequest(prev, req._id));
+					// The builder keeps its contents; it's just no longer linked.
+					setActiveRequestId((id) => (id === req._id ? null : id));
+					notify("success", `Deleted “${req.name}”`);
+				} catch (e) {
+					notify("error", `Couldn’t delete “${req.name}”: ${e.message}`);
+				}
+			},
+		});
+	}
+
+	// No confirm: the entry disappears at once and comes back if the server
+	// refuses, so the list always reflects what's actually stored.
+	async function handleDeleteHistoryEntry(entry) {
+		const index = history.findIndex((e) => e._id === entry._id);
+		setHistory((prev) => prev.filter((e) => e._id !== entry._id));
+		try {
+			await historyApi.remove(entry._id);
+			notify("success", "Removed from history");
+		} catch (e) {
+			setHistory((prev) => {
+				if (prev.some((e2) => e2._id === entry._id)) return prev;
+				const next = [...prev];
+				next.splice(index < 0 ? next.length : Math.min(index, next.length), 0, entry);
+				return next;
+			});
+			notify("error", `Couldn’t remove the history entry: ${e.message}`);
+		}
 	}
 
 	function handleSelectRequest(req) {
@@ -412,13 +505,17 @@ export function PostmanWorkspace({ account, onLogout }) {
 				historyHasMore={Boolean(historyCursor)}
 				historyLoadingMore={historyLoadingMore}
 				onLoadMoreHistory={loadMoreHistory}
-				activeRequestId={activeRequestId}
+				activeRequestId={activeSaved ? activeRequestId : null}
+				activeRequestDirty={activeRequestDirty}
 				onSelectRequest={handleSelectRequest}
 				onCreateCollection={handleCreateCollection}
 				onRenameCollection={handleRenameCollection}
 				onDeleteCollection={handleDeleteCollection}
+				onRenameRequest={handleRenameRequest}
+				onDeleteRequest={handleDeleteRequest}
 				onClearHistory={handleClearHistory}
 				onSelectHistory={handleSelectHistory}
+				onDeleteHistoryEntry={handleDeleteHistoryEntry}
 				onResizeMouseDown={onSidebarResizeMouseDown}
 			/>
 			<main className="workspace">
@@ -441,7 +538,18 @@ export function PostmanWorkspace({ account, onLogout }) {
 							request={request}
 							onRequestChange={updateRequest}
 							onSend={handleSend}
-							onSave={() => setShowSave(true)}
+							onSave={handleSaveClick}
+							onSaveAs={() => setShowSave(true)}
+							savingRequest={savingRequest}
+							savedContext={
+								activeSaved
+									? {
+											collectionName: activeSaved.collection.name,
+											name: activeSaved.request.name,
+											dirty: activeRequestDirty,
+										}
+									: null
+							}
 							sending={sending}
 							activeEnvironmentVariables={environments.find((e) => e.isActive)?.variables || []}
 						/>
@@ -489,6 +597,7 @@ export function PostmanWorkspace({ account, onLogout }) {
 			)}
 
 			{confirmDialog && <ConfirmDialog {...confirmDialog} onCancel={() => setConfirmDialog(null)} />}
+			<ToastStack toasts={toasts} onDismiss={dismiss} />
 		</div>
 	);
 }

@@ -30,7 +30,19 @@ function hasAuth(auth) {
 				: false;
 }
 
-export function RequestBuilder({ request, onRequestChange, onSend, onSave, sending, activeEnvironmentVariables = [] }) {
+// `savedContext` describes the saved request currently loaded from a
+// collection ({ collectionName, name, dirty }), or is null for an unsaved one.
+export function RequestBuilder({
+	request,
+	onRequestChange,
+	onSend,
+	onSave,
+	onSaveAs,
+	savingRequest = false,
+	savedContext = null,
+	sending,
+	activeEnvironmentVariables = [],
+}) {
 	const [activeTab, setActiveTab] = useState("Params");
 	const overlayRef = useRef(null);
 	const set = useCallback((field, value) => onRequestChange({ ...request, [field]: value }), [request, onRequestChange]);
@@ -105,8 +117,13 @@ export function RequestBuilder({ request, onRequestChange, onSend, onSave, sendi
 					/>
 				</div>
 
-				<button className="save-btn" onClick={onSave} disabled={!url || sending} title="Save to collection">
-					Save
+				<button
+					className="save-btn"
+					onClick={onSave}
+					disabled={!url || sending || savingRequest}
+					title={savedContext ? `Save changes to “${savedContext.name}”` : "Save to collection"}
+				>
+					{savingRequest ? "Saving…" : "Save"}
 				</button>
 				<button className="send-btn" onClick={onSend} disabled={!url || sending} aria-label="Send request">
 					{sending ? "Sending…" : "Send"}
@@ -119,19 +136,41 @@ export function RequestBuilder({ request, onRequestChange, onSend, onSave, sendi
 				</div>
 			)}
 
-			<div className="tabs" role="tablist">
-				{tabs.map(({ label, badge }) => (
-					<button
-						key={label}
-						role="tab"
-						className={`tab-btn ${activeTab === label ? "active" : ""}`}
-						aria-selected={activeTab === label}
-						onClick={() => setActiveTab(label)}
-					>
-						{label}
-						{badge != null && <span className="tab-count">{badge}</span>}
-					</button>
-				))}
+			<div className="tabs">
+				<div className="tabs-list" role="tablist">
+					{tabs.map(({ label, badge }) => (
+						<button
+							key={label}
+							role="tab"
+							className={`tab-btn ${activeTab === label ? "active" : ""}`}
+							aria-selected={activeTab === label}
+							onClick={() => setActiveTab(label)}
+						>
+							{label}
+							{badge != null && <span className="tab-count">{badge}</span>}
+						</button>
+					))}
+				</div>
+				{savedContext && (
+					<div className="saved-context">
+						<span className="saved-context-path" title={`${savedContext.collectionName} › ${savedContext.name}`}>
+							<span className="saved-context-collection">{savedContext.collectionName}</span>
+							<span className="saved-context-sep" aria-hidden="true">
+								›
+							</span>
+							<span className="saved-context-name">{savedContext.name}</span>
+						</span>
+						{savedContext.dirty && (
+							<span className="saved-context-dirty" title="Unsaved changes">
+								<span className="saved-context-dot" aria-hidden="true" />
+								Unsaved changes
+							</span>
+						)}
+						<button type="button" className="saved-context-saveas" onClick={onSaveAs}>
+							Save as new…
+						</button>
+					</div>
+				)}
 			</div>
 
 			<div className="tab-panel" role="tabpanel">

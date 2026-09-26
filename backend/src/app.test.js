@@ -65,7 +65,7 @@ describe("error handling (live HTTP)", () => {
 	});
 
 	test("an invalid ObjectId in a route param returns 400 INVALID_ID, not 500", async () => {
-		const response = await authed("/collections/not-a-valid-id/requests");
+		const response = await authed("/collections/not-a-valid-id", { method: "DELETE" });
 		const payload = await response.json();
 
 		expect(response.status).toBe(400);
@@ -138,8 +138,8 @@ describe("saved request row descriptions (live HTTP)", () => {
 		});
 		expect(created.status).toBe(201);
 
-		const listed = await (await authed(`/collections/${collection.data._id}/requests`)).json();
-		const saved = listed.data.find((item) => item.name === "With descriptions");
+		const listed = await (await authed("/collections")).json();
+		const saved = listed.data.find((c) => c._id === collection.data._id).requests.find((item) => item.name === "With descriptions");
 		expect(saved.params).toEqual([
 			{ key: "page", value: "2", enabled: true, description: "1-based page number" },
 			{ key: "debug", value: "1", enabled: false },
@@ -162,6 +162,138 @@ describe("saved request row descriptions (live HTTP)", () => {
 		});
 		expect(response.status).toBe(400);
 		expect((await response.json()).error.code).toBe("VALIDATION_ERROR");
+	});
+});
+
+describe("saved request update, rename and delete; history entry delete (live HTTP)", () => {
+	const json = (method, body) => ({ method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+	async function newCollection(name) {
+		return (await (await authed("/collections", json("POST", { name }))).json()).data;
+	}
+	async function requestsIn(collectionId, token) {
+		const listed = await (
+			await (token ? fetch(`${baseUrl}/collections`, { headers: { Authorization: `Bearer ${token}` } }) : authed("/collections"))
+		).json();
+		return listed.data.find((c) => c._id === collectionId)?.requests ?? [];
+	}
+	async function otherAccountToken() {
+		const passwordHash = await bcrypt.hash("password123", 4);
+		await WorkspaceAccount.create({ name: "Other User", email: `other.${Date.now()}@example.com`, passwordHash, active: true });
+		const accounts = await WorkspaceAccount.find({ name: "Other User" }).sort({ _id: -1 }).limit(1);
+		const login = await fetch(`${baseUrl}/auth/login`, json("POST", { email: accounts[0].email, password: "password123" }));
+		return (await login.json()).data.token;
+	}
+
+	test("saving an already-saved request updates it in place: same id, no duplicate", async () => {
+		const collection = await newCollection("Update in place");
+		const created = (
+			await (
+				await authed(`/collections/${collection._id}/requests`, json("POST", { name: "Users", url: "http://localhost/a" }))
+			).json()
+		).data;
+		const updated = await authed(
+			`/requests/${created._id}`,
+			json("PUT", { name: "Users", method: "POST", url: "http://localhost/b", body: '{"x":1}', bodyType: "json" }),
+		);
+		expect(updated.status).toBe(200);
+		const requests = await requestsIn(collection._id);
+		expect(requests).toHaveLength(1);
+		expect(requests[0]).toMatchObject({
+			_id: created._id,
+			method: "POST",
+			url: "http://localhost/b",
+			body: '{"x":1}',
+			bodyType: "json",
+		});
+	});
+
+	test("rename sends only the name and leaves every other field untouched", async () => {
+		const collection = await newCollection("Rename");
+		const created = (
+			await (
+				await authed(
+					`/collections/${collection._id}/requests`,
+					json("POST", { name: "Old", url: "http://localhost/keep", params: [{ key: "q", value: "1", enabled: true }] }),
+				)
+			).json()
+		).data;
+		expect((await authed(`/requests/${created._id}`, json("PUT", { name: "New name" }))).status).toBe(200);
+		const [renamed] = await requestsIn(collection._id);
+		expect(renamed).toMatchObject({
+			name: "New name",
+			url: "http://localhost/keep",
+			params: [{ key: "q", value: "1", enabled: true }],
+		});
+		expect((await authed(`/requests/${created._id}`, json("PUT", { name: "" }))).status).toBe(400);
+	});
+
+	test("deleting a saved request removes it; deleting it again is a 404; another account can't delete it", async () => {
+		const collection = await newCollection("Delete");
+		const created = (await (await authed(`/collections/${collection._id}/requests`, json("POST", { name: "Doomed" }))).json()).data;
+		const other = await otherAccountToken();
+		const foreign = await fetch(`${baseUrl}/requests/${created._id}`, {
+			method: "DELETE",
+			headers: { Authorization: `Bearer ${other}` },
+		});
+		expect(foreign.status).toBe(404);
+		expect(await requestsIn(collection._id)).toHaveLength(1);
+		expect((await authed(`/requests/${created._id}`, { method: "DELETE" })).status).toBe(204);
+		expect(await requestsIn(collection._id)).toHaveLength(0);
+		expect((await authed(`/requests/${created._id}`, { method: "DELETE" })).status).toBe(404);
+	});
+
+	test("deleting one history entry removes only that entry; another account can't delete it", async () => {
+		const send = () => authed("/proxy", json("POST", { method: "GET", url: `${baseUrl}/sandbox/get` }));
+		await send();
+		await send();
+		const before = (await (await authed("/history?limit=100")).json()).data.items;
+		const [target, keep] = before;
+		const other = await otherAccountToken();
+		const foreign = await fetch(`${baseUrl}/history/${target._id}`, {
+			method: "DELETE",
+			headers: { Authorization: `Bearer ${other}` },
+		});
+		expect(foreign.status).toBe(404);
+		expect((await authed(`/history/${target._id}`, { method: "DELETE" })).status).toBe(204);
+		const after = (await (await authed("/history?limit=100")).json()).data.items.map((item) => item._id);
+		expect(after).not.toContain(target._id);
+		expect(after).toContain(keep._id);
+		expect(after).toHaveLength(before.length - 1);
+	});
+
+	test("partial updates never reset fields that weren't sent: collection rename keeps its description", async () => {
+		const created = (
+			await (await authed("/collections", json("POST", { name: "Keep description", description: "Seeded notes" }))).json()
+		).data;
+		expect((await authed(`/collections/${created._id}`, json("PUT", { name: "Renamed" }))).status).toBe(200);
+		const listed = (await (await authed("/collections")).json()).data.find((c) => c._id === created._id);
+		expect(listed).toMatchObject({ name: "Renamed", description: "Seeded notes" });
+	});
+
+	test("partial updates never reset fields that weren't sent: saving an active environment keeps it active", async () => {
+		const env = (
+			await (
+				await authed(
+					"/environments",
+					json("POST", { name: "Active env", isActive: true, variables: [{ key: "baseUrl", value: "http://a" }] }),
+				)
+			).json()
+		).data;
+		expect(env.isActive).toBe(true);
+		// Exactly what the Environments modal sends on Save: name + variables, no isActive.
+		const saved = await authed(
+			`/environments/${env._id}`,
+			json("PUT", { name: "Active env", variables: [{ key: "baseUrl", value: "http://b" }] }),
+		);
+		expect(saved.status).toBe(200);
+		const after = (await (await authed("/environments")).json()).data.find((e) => e._id === env._id);
+		expect(after.isActive).toBe(true);
+		expect(after.variables[0].value).toBe("http://b");
+	});
+
+	test("the removed per-collection request listing route no longer exists", async () => {
+		const collection = await newCollection("Removed route");
+		expect((await authed(`/collections/${collection._id}/requests`)).status).toBe(404);
 	});
 });
 

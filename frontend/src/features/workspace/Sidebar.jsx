@@ -1,14 +1,22 @@
 import { useState, useRef, useEffect } from "react";
 import { statusClass } from "../../shared/utils/format.js";
 
-function CollectionMenu({ collection, onRename, onDelete, onClose }) {
+// Rename / Delete menu shared by collections and saved requests.
+function ItemMenu({ onRename, onDelete, onClose }) {
 	const ref = useRef(null);
 	useEffect(() => {
 		const handler = (e) => {
 			if (ref.current && !ref.current.contains(e.target)) onClose();
 		};
+		const onKey = (e) => {
+			if (e.key === "Escape") onClose();
+		};
 		document.addEventListener("mousedown", handler);
-		return () => document.removeEventListener("mousedown", handler);
+		document.addEventListener("keydown", onKey);
+		return () => {
+			document.removeEventListener("mousedown", handler);
+			document.removeEventListener("keydown", onKey);
+		};
 	}, [onClose]);
 	return (
 		<div className="dropdown-menu" ref={ref} role="menu">
@@ -16,7 +24,7 @@ function CollectionMenu({ collection, onRename, onDelete, onClose }) {
 				className="dropdown-item"
 				role="menuitem"
 				onClick={() => {
-					onRename(collection);
+					onRename();
 					onClose();
 				}}
 			>
@@ -26,7 +34,7 @@ function CollectionMenu({ collection, onRename, onDelete, onClose }) {
 				className="dropdown-item danger"
 				role="menuitem"
 				onClick={() => {
-					onDelete(collection);
+					onDelete();
 					onClose();
 				}}
 			>
@@ -36,9 +44,55 @@ function CollectionMenu({ collection, onRename, onDelete, onClose }) {
 	);
 }
 
-function CollectionItem({ collection, defaultOpen, activeRequestId, onSelectRequest, onRenameCollection, onDeleteCollection }) {
+// Inline rename form, used for saved requests. `onSubmit(name)` resolves to
+// true on success; on failure the form stays open so the name isn't lost.
+function InlineRename({ initial, onSubmit, onCancel, label }) {
+	const [value, setValue] = useState(initial);
+	const [pending, setPending] = useState(false);
+	async function handleSubmit(e) {
+		e.preventDefault();
+		const name = value.trim();
+		if (!name || name === initial) return onCancel();
+		setPending(true);
+		const ok = await onSubmit(name);
+		setPending(false);
+		if (ok) onCancel();
+	}
+	return (
+		<form className="inline-form" onSubmit={handleSubmit} onKeyDown={(e) => e.key === "Escape" && onCancel()}>
+			<input
+				className="inline-input"
+				value={value}
+				onChange={(e) => setValue(e.target.value)}
+				autoFocus
+				disabled={pending}
+				aria-label={label}
+			/>
+			<button className="inline-btn inline-btn-ok" type="submit" disabled={pending || !value.trim()} aria-label="Save name">
+				{pending ? "…" : "✓"}
+			</button>
+			<button className="inline-btn inline-btn-cancel" type="button" onClick={onCancel} disabled={pending} aria-label="Cancel rename">
+				✕
+			</button>
+		</form>
+	);
+}
+
+function CollectionItem({
+	collection,
+	defaultOpen,
+	activeRequestId,
+	activeRequestDirty,
+	onSelectRequest,
+	onRenameCollection,
+	onDeleteCollection,
+	onRenameRequest,
+	onDeleteRequest,
+}) {
 	const [open, setOpen] = useState(defaultOpen);
 	const [menuOpen, setMenuOpen] = useState(false);
+	const [requestMenuId, setRequestMenuId] = useState(null);
+	const [renamingRequestId, setRenamingRequestId] = useState(null);
 	const requests = collection.requests || [];
 
 	return (
@@ -68,17 +122,17 @@ function CollectionItem({ collection, defaultOpen, activeRequestId, onSelectRequ
 							e.stopPropagation();
 							setMenuOpen((m) => !m);
 						}}
-						aria-label="Options"
-						aria-haspopup="true"
+						aria-label={`Options for ${collection.name}`}
+						aria-haspopup="menu"
+						aria-expanded={menuOpen}
 					>
 						⋯
 					</button>
 				</div>
 				{menuOpen && (
-					<CollectionMenu
-						collection={collection}
-						onRename={onRenameCollection}
-						onDelete={onDeleteCollection}
+					<ItemMenu
+						onRename={() => onRenameCollection(collection)}
+						onDelete={() => onDeleteCollection(collection)}
 						onClose={() => setMenuOpen(false)}
 					/>
 				)}
@@ -88,18 +142,50 @@ function CollectionItem({ collection, defaultOpen, activeRequestId, onSelectRequ
 					{requests.length === 0 ? (
 						<p className="no-data">No saved requests</p>
 					) : (
-						requests.map((req) => (
-							<button
-								key={req._id}
-								className={`request-item ${activeRequestId === req._id ? "active" : ""}`}
-								onClick={() => onSelectRequest(req)}
-							>
-								<span className={`method-badge method-${req.method}`}>{req.method}</span>
-								<span className="req-name" title={req.name}>
-									{req.name}
-								</span>
-							</button>
-						))
+						requests.map((req) =>
+							renamingRequestId === req._id ? (
+								<InlineRename
+									key={req._id}
+									initial={req.name}
+									label={`Rename ${req.name}`}
+									onSubmit={(name) => onRenameRequest(req, name)}
+									onCancel={() => setRenamingRequestId(null)}
+								/>
+							) : (
+								<div key={req._id} className={`request-row ${activeRequestId === req._id ? "active" : ""}`}>
+									<button
+										className={`request-item ${activeRequestId === req._id ? "active" : ""}`}
+										onClick={() => onSelectRequest(req)}
+									>
+										<span className={`method-badge method-${req.method}`}>{req.method}</span>
+										<span className="req-name" title={req.name}>
+											{req.name}
+										</span>
+										{activeRequestId === req._id && activeRequestDirty && (
+											<span className="request-dirty-dot" title="Unsaved changes" aria-label="Unsaved changes" />
+										)}
+									</button>
+									<div className="menu-anchor">
+										<button
+											className="request-menu-btn"
+											onClick={() => setRequestMenuId((id) => (id === req._id ? null : req._id))}
+											aria-label={`Options for ${req.name}`}
+											aria-haspopup="menu"
+											aria-expanded={requestMenuId === req._id}
+										>
+											⋯
+										</button>
+										{requestMenuId === req._id && (
+											<ItemMenu
+												onRename={() => setRenamingRequestId(req._id)}
+												onDelete={() => onDeleteRequest(req)}
+												onClose={() => setRequestMenuId(null)}
+											/>
+										)}
+									</div>
+								</div>
+							),
+						)
 					)}
 				</div>
 			)}
@@ -114,12 +200,16 @@ export function Sidebar({
 	historyLoadingMore,
 	onLoadMoreHistory,
 	activeRequestId,
+	activeRequestDirty,
 	onSelectRequest,
 	onCreateCollection,
 	onRenameCollection,
 	onDeleteCollection,
+	onRenameRequest,
+	onDeleteRequest,
 	onClearHistory,
 	onSelectHistory,
+	onDeleteHistoryEntry,
 	onResizeMouseDown,
 }) {
 	const [activeTab, setActiveTab] = useState("Collections");
@@ -237,9 +327,12 @@ export function Sidebar({
 										collection={col}
 										defaultOpen={col._id === collections[0]?._id}
 										activeRequestId={activeRequestId}
+										activeRequestDirty={activeRequestDirty}
 										onSelectRequest={onSelectRequest}
 										onRenameCollection={startRename}
 										onDeleteCollection={onDeleteCollection}
+										onRenameRequest={onRenameRequest}
+										onDeleteRequest={onDeleteRequest}
 									/>
 								),
 							)}
@@ -259,18 +352,27 @@ export function Sidebar({
 							) : (
 								<>
 									{history.map((entry) => (
-										<button
-											key={entry._id}
-											className="history-item"
-											onClick={() => onSelectHistory(entry)}
-											title={`${entry.method} ${entry.url}`}
-										>
-											<span className={`method-badge method-${entry.method}`}>{entry.method}</span>
-											<span className="hist-url">{entry.url}</span>
-											{entry.status && (
-												<span className={`hist-status ${statusClass(entry.status)}`}>{entry.status}</span>
-											)}
-										</button>
+										<div key={entry._id} className="history-row">
+											<button
+												className="history-item"
+												onClick={() => onSelectHistory(entry)}
+												title={`${entry.method} ${entry.url}`}
+											>
+												<span className={`method-badge method-${entry.method}`}>{entry.method}</span>
+												<span className="hist-url">{entry.url}</span>
+												{entry.status && (
+													<span className={`hist-status ${statusClass(entry.status)}`}>{entry.status}</span>
+												)}
+											</button>
+											<button
+												className="history-del-btn"
+												onClick={() => onDeleteHistoryEntry(entry)}
+												aria-label={`Delete history entry ${entry.method} ${entry.url}`}
+												title="Delete from history"
+											>
+												×
+											</button>
+										</div>
 									))}
 									{historyHasMore && (
 										<button className="history-load-more-btn" onClick={onLoadMoreHistory} disabled={historyLoadingMore}>

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { collectionService } from "./collection.service.js";
+import { updateSchemaFrom } from "../../shared/utils/update-schema.js";
 
 const collectionSchema = z
 	.object({
@@ -39,6 +40,9 @@ const requestSchema = z
 	})
 	.strict();
 
+const collectionUpdateSchema = updateSchemaFrom(collectionSchema);
+const requestUpdateSchema = updateSchemaFrom(requestSchema);
+
 export async function listCollections(request, response, next) {
 	try {
 		response.json({ data: await collectionService.list(request.account._id) });
@@ -58,7 +62,7 @@ export async function createCollection(request, response, next) {
 
 export async function updateCollection(request, response, next) {
 	try {
-		const data = collectionSchema.partial().parse(request.body);
+		const data = collectionUpdateSchema.parse(request.body);
 		response.json({ data: await collectionService.update(request.params.id, request.account._id, data) });
 	} catch (error) {
 		next(error);
@@ -69,14 +73,6 @@ export async function deleteCollection(request, response, next) {
 	try {
 		await collectionService.remove(request.params.id, request.account._id);
 		response.status(204).end();
-	} catch (error) {
-		next(error);
-	}
-}
-
-export async function listRequests(request, response, next) {
-	try {
-		response.json({ data: await collectionService.getRequests(request.params.id, request.account._id) });
 	} catch (error) {
 		next(error);
 	}
@@ -93,7 +89,7 @@ export async function createRequest(request, response, next) {
 
 export async function updateRequest(request, response, next) {
 	try {
-		const data = requestSchema.partial().parse(request.body);
+		const data = requestUpdateSchema.parse(request.body);
 		response.json({ data: await collectionService.updateRequest(request.params.id, request.account._id, data) });
 	} catch (error) {
 		next(error);

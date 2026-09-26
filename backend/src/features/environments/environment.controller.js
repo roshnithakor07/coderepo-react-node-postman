@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { environmentService } from "./environment.service.js";
+import { updateSchemaFrom } from "../../shared/utils/update-schema.js";
 
 const variableSchema = z.object({
 	key: z.string().min(1).max(200).trim(),
@@ -14,6 +15,8 @@ const environmentSchema = z
 		variables: z.array(variableSchema).default([]),
 	})
 	.strict();
+
+const environmentUpdateSchema = updateSchemaFrom(environmentSchema);
 
 export async function listEnvironments(request, response, next) {
 	try {
@@ -34,7 +37,7 @@ export async function createEnvironment(request, response, next) {
 
 export async function updateEnvironment(request, response, next) {
 	try {
-		const data = environmentSchema.partial().parse(request.body);
+		const data = environmentUpdateSchema.parse(request.body);
 		response.json({ data: await environmentService.update(request.params.id, request.account._id, data) });
 	} catch (error) {
 		next(error);

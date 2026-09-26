@@ -758,7 +758,8 @@ textarea:focus-visible {
 	white-space: nowrap;
 }
 .collection-menu-btn {
-	display: none;
+	display: grid;
+	opacity: 0;
 	width: 20px;
 	height: 20px;
 	border-radius: var(--radius-sm);
@@ -768,8 +769,13 @@ textarea:focus-visible {
 	flex-shrink: 0;
 	transition: all var(--t-fast);
 }
-.collection-header:hover .collection-menu-btn {
-	display: grid;
+/* Revealed on hover or keyboard focus (opacity keeps it in the tab order),
+   always visible on touch screens — the same pattern as the request and
+   history row actions below. */
+.collection-header:hover .collection-menu-btn,
+.collection-header:focus-within .collection-menu-btn,
+.collection-menu-btn[aria-expanded="true"] {
+	opacity: 1;
 }
 .collection-menu-btn:hover {
 	background: var(--bg-active);
@@ -2551,6 +2557,211 @@ mark.search-match-current {
 	display: flex;
 	flex-direction: column;
 	overflow: hidden;
+}
+
+/* ─── Saved-request rows, history rows: hover/focus-revealed actions ─── */
+.request-row,
+.history-row {
+	position: relative;
+	display: flex;
+	align-items: center;
+	border-radius: var(--radius-md);
+}
+.request-row .request-item,
+.history-row .history-item {
+	flex: 1;
+	min-width: 0;
+	padding-right: 30px; /* room for the row action */
+}
+/* Vertically centred without a transform: a transform would create a
+   stacking context and trap the row menu's dropdown (z-index) underneath the
+   next collection in the sidebar. */
+.request-row > .menu-anchor,
+.history-row > .history-del-btn {
+	position: absolute;
+	right: 4px;
+	top: 0;
+	bottom: 0;
+	margin: auto 0;
+}
+.request-row > .menu-anchor {
+	display: flex;
+	align-items: center;
+	height: 22px;
+}
+.request-menu-btn,
+.history-del-btn {
+	display: grid;
+	place-items: center;
+	width: 22px;
+	height: 22px;
+	border-radius: var(--radius-sm);
+	color: var(--text-tertiary);
+	font-size: 14px;
+	opacity: 0;
+	transition: all var(--t-fast);
+}
+.request-row:hover .request-menu-btn,
+.request-row:focus-within .request-menu-btn,
+.request-menu-btn[aria-expanded="true"],
+.history-row:hover .history-del-btn,
+.history-row:focus-within .history-del-btn {
+	opacity: 1;
+}
+.request-menu-btn:hover {
+	background: var(--bg-hover);
+	color: var(--text-primary);
+}
+.history-del-btn:hover {
+	background: var(--danger-bg);
+	color: var(--danger);
+}
+@media (hover: none) {
+	.collection-menu-btn,
+	.request-menu-btn,
+	.history-del-btn {
+		opacity: 1;
+	}
+}
+.request-dirty-dot {
+	flex-shrink: 0;
+	width: 6px;
+	height: 6px;
+	margin-left: auto;
+	border-radius: 50%;
+	background: var(--brand);
+}
+
+/* ─── Loaded saved request, shown on the right of the request tab row ─── */
+.tabs-list {
+	display: flex;
+	flex-shrink: 0;
+}
+.saved-context {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
+	margin-left: auto;
+	padding-left: 16px;
+	font-size: 11px;
+}
+.saved-context-path {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	color: var(--text-tertiary);
+}
+.saved-context-collection {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.saved-context-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	color: var(--text-secondary);
+	font-weight: 600;
+}
+.saved-context-dirty {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	flex-shrink: 0;
+	color: var(--text-secondary);
+}
+.saved-context-dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--brand);
+}
+.saved-context-saveas {
+	flex-shrink: 0;
+	height: 22px;
+	padding: 0 8px;
+	border-radius: var(--radius-sm);
+	color: var(--text-tertiary);
+	font-size: 11px;
+	font-weight: 600;
+	transition: all var(--t-fast);
+}
+.saved-context-saveas:hover {
+	color: var(--primary);
+	background: var(--primary-dim);
+}
+@media (max-width: 768px) {
+	.saved-context-path,
+	.saved-context-saveas {
+		display: none;
+	}
+}
+
+/* ─── Toasts ─── */
+.toast-stack {
+	position: fixed;
+	right: 16px;
+	bottom: 16px;
+	z-index: 1000;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	max-width: min(360px, calc(100vw - 32px));
+	pointer-events: none;
+}
+.toast {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 10px 10px 10px 12px;
+	border: 1px solid var(--border-default);
+	border-radius: var(--radius-lg);
+	background: var(--bg-elevated);
+	box-shadow: var(--shadow-lg);
+	color: var(--text-primary);
+	font-size: 12px;
+	pointer-events: auto;
+	animation: menuIn 120ms var(--ease);
+}
+.toast-icon {
+	display: grid;
+	place-items: center;
+	flex-shrink: 0;
+	width: 18px;
+	height: 18px;
+	border-radius: 50%;
+	font-size: 11px;
+	font-weight: 700;
+}
+.toast-success .toast-icon,
+.toast-info .toast-icon {
+	background: var(--success-bg, rgba(74, 222, 128, 0.12));
+	color: var(--success);
+}
+.toast-error {
+	border-color: rgba(248, 113, 113, 0.35);
+}
+.toast-error .toast-icon {
+	background: var(--danger-bg);
+	color: var(--danger);
+}
+.toast-message {
+	flex: 1;
+	min-width: 0;
+}
+.toast-close {
+	flex-shrink: 0;
+	width: 22px;
+	height: 22px;
+	border-radius: var(--radius-sm);
+	color: var(--text-tertiary);
+	font-size: 14px;
+}
+.toast-close:hover {
+	background: var(--bg-hover);
+	color: var(--text-primary);
 }
 
 /* ─── Responsive ─── */

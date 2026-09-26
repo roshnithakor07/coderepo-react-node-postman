@@ -25,12 +25,6 @@ export const collectionService = {
 		return collection;
 	},
 
-	async getRequests(collectionId, accountId) {
-		const collection = await collectionRepository.findById(collectionId, accountId);
-		if (!collection) throw new AppError(404, "NOT_FOUND", "Collection not found.");
-		return collectionRepository.findRequestsByCollection(collectionId, accountId);
-	},
-
 	async createRequest(collectionId, accountId, data) {
 		const collection = await collectionRepository.findById(collectionId, accountId);
 		if (!collection) throw new AppError(404, "NOT_FOUND", "Collection not found.");
