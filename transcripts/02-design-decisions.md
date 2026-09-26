@@ -144,3 +144,20 @@ Branch `feature/response-viewer-polish` added four things to the Pretty tab: JSO
   - All 13 backend files and `jsonSearch.test.js` are identical after `bun build --minify`.
   - Build and 51/51 tests passed, and a browser click-test passed 10/10: send, JSON tree, search navigation/wrap, history reload, save to collection, save response, no console errors.
   - `.git-blame-ignore-revs` lists the commit so `git blame` attributes lines to their real authors.
+
+## Key-value editor: placeholder row, bulk edit format, descriptions, pane minimums (branch `feature/kv-editor-polish`)
+
+- **The auto-added row is a placeholder, not stored data.** Appending a real empty row whenever the last one is typed into would put empty rows into request state, and from there into saved requests, history and URL/Params reconciliation. Instead the table always renders one extra placeholder row; typing into it creates the real row. It's the last item of the same React list with the key of its future index, which is what keeps the cursor in place.
+- **Bulk edit format is lossless by design, not by convention.** The user asked for round trips with no data loss, so text is never trimmed (`key: value` keeps the space) and a small escape set covers what plain `key:value` lines can't express (colons inside keys, line breaks, an enabled key starting with `//`). A literal backslash is escaped only where it would otherwise be misread, so ordinary values like `C:\path` stay readable. Descriptions aren't written in the text; they're re-attached by key. A seeded random test (three seeds × 2,000 cases) guards the guarantee.
+- **Bulk edits apply live,** so URL ↔ Params sync keeps working while typing. External changes (e.g. the URL bar) rebuild the text: the editor remembers the array it last emitted and treats any other incoming `rows` as external.
+- **Description persistence needed a small backend change.** The collections zod row schema (non-strict object) and the mongoose row sub-schemas both silently stripped unknown fields, so the column would have lost its content on save. Added an optional `description` (max 500) to both; it's additive and backward-compatible. The proxy and snippet schemas are unchanged because descriptions are documentation, never sent.
+- **Delete button visibility is CSS-only** (`opacity` with `:hover`/`:focus-within`, always visible under `(hover: none)`), so it stays in the tab order and is revealed by keyboard focus. It's scoped to `.kv-editor` because the Environments modal shares `.kv-del-btn`.
+- **Pane minimums are pixels derived from measured component heights** (request 200px, response 180px). The CSS minimums use `min(Npx, 45%)` so a very short window still fits both panes, and the splitter drag falls back to proportional minimums in that case.
+- No new dependencies (GUIDELINES §2.2); everything is self-written.
+
+### Key-value editor, round 2: measured split and shrink-first bulk layout
+
+- **The split is a pixel height with a measured default, not a percentage.** A percentage can leave a row cut at any window height. Rendering the request pane at its natural height on first layout (header + one empty row + panel padding) and fixing it in a layout effect guarantees a clean default at every window height, with no flash.
+- **Divider limits are measured from the live layout** (bottom of the request tab bar, bottom of the response header bar) instead of pixel constants. This restores the pre-change, Postman-like range while staying correct when the request bar wraps on narrow screens. Constants would drift from the CSS.
+- **Dragging uses the grab offset** (height at grab + pointer delta), so the divider never jumps when grabbed and tracks the pointer 1:1 in both directions.
+- **Bulk edit is shrink-first:** the toggle and hint have priority over the textarea's size. A sticky-positioning attempt failed at very small panes, so the textarea now yields first. The textarea gets 3+ lines whenever the pane allows it (≥ ~245px), toggle and hint are guaranteed from ~190px, and below that the panel scrolls, since a textarea can't shrink past its own 22px frame.

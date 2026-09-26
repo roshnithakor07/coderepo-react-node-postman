@@ -1,7 +1,13 @@
 import mongoose from "mongoose";
 
-const headerSchema = new mongoose.Schema({ key: String, value: String, enabled: { type: Boolean, default: true } }, { _id: false });
-const paramSchema = new mongoose.Schema({ key: String, value: String, enabled: { type: Boolean, default: true } }, { _id: false });
+const headerSchema = new mongoose.Schema(
+	{ key: String, value: String, enabled: { type: Boolean, default: true }, description: { type: String, maxlength: 500 } },
+	{ _id: false },
+);
+const paramSchema = new mongoose.Schema(
+	{ key: String, value: String, enabled: { type: Boolean, default: true }, description: { type: String, maxlength: 500 } },
+	{ _id: false },
+);
 
 const savedRequestSchema = new mongoose.Schema(
 	{

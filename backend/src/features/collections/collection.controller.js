@@ -8,7 +8,12 @@ const collectionSchema = z
 	})
 	.strict();
 
-const headerParamSchema = z.object({ key: z.string(), value: z.string(), enabled: z.boolean().default(true) });
+const headerParamSchema = z.object({
+	key: z.string(),
+	value: z.string(),
+	enabled: z.boolean().default(true),
+	description: z.string().max(500).optional(),
+});
 
 const authSchema = z.object({
 	type: z.enum(["none", "bearer", "basic", "apikey"]).default("none"),
