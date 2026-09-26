@@ -162,3 +162,7 @@ Branch `feature/response-viewer-polish` added four things to the Pretty tab: JSO
 - **Dragging uses the grab offset** (height at grab + pointer delta), so the divider never jumps when grabbed and tracks the pointer 1:1 in both directions.
 - **Bulk edit is shrink-first:** the toggle and hint have priority over the textarea's size. A sticky-positioning attempt failed at very small panes, so the textarea now yields first. The textarea gets 3+ lines whenever the pane allows it (≥ ~245px), toggle and hint are guaranteed from ~190px, and below that the panel scrolls, since a textarea can't shrink past its own 22px frame.
 - **Status:** Merged into `main` (merge commit `73a68d3`, 2026-09-26).
+
+## Submission audit method (branch `chore/submission-audit`)
+
+- **The fresh-clone test used a disposable database instead of the live one.** `bun start`'s `prestart` always wipes and re-seeds, and the validator forbids stopping processes the audit didn't start or touching the live database. So the clone got a pre-created `backend/.env` (disposable `postman_db_audit_*`, backend port 8100), recorded as the one deviation from the README flow. The full `bun start` on 3000/8000 is left as MANUAL until the ports can be freed with the user's approval.

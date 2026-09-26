@@ -3929,3 +3929,31 @@ The default pane on load (229px) is above the first threshold.
 ### Update — approved and merged
 
 **Status:** Merged — approved 2026-09-26, merged into `main` with `--no-ff` (merge commit `73a68d3`); the merged `main` builds and passes 79/79 tests. `feature/kv-editor-polish` deleted locally and on `origin`. The user asked not to start `feature/form-body-table` yet.
+
+---
+
+## 2026-09-26 — chore/submission-audit — Pre-submission audit (report only; no fixes yet)
+
+**Status:** Report delivered; awaiting the user's choice of fixes.
+
+**Task:** Audit, and report only (no fixes until approved): the full `skills/validate` validator; the AGENTS.md §6 / GUIDELINES.md contract line by line; a fresh-clone install and start; secrets in git history; readiness of the log and transcripts for export, including the AGREEMENT block; README accuracy; guideline rules; and a reviewer's first five minutes. Output a priority table.
+
+**How it was run, and why:**
+- The fresh clone came from `origin/main` (`21f3e7d`) into the scratchpad. The exact `hackerrank.yml` install command ran with one deliberate deviation: a pre-created `backend/.env` pointing at a disposable `postman_db_audit_*` database and port 8100. The start command's `prestart` always wipes and re-seeds, and the user's dev servers occupy 3000/8000. The validator itself forbids stopping processes the audit didn't start and touching the live database.
+- The runtime API checks ran against the clone's own backend. The UI click-through ran against the user's dev servers (same commit). The disposable database was dropped and the audit backend stopped afterwards.
+
+**Findings (by priority):**
+- **Blocker 1 (S15/S16):** `PUT /requests/:id`, `DELETE /requests/:id` and `DELETE /history/:id` have API clients but no UI; `GET /collections/:id/requests` is unused because the collection list already embeds requests. That's 4 public routes with no reachable consumer, plus dead client methods.
+- **Blocker 2:** `log.txt` has not been exported to `transcripts/` (AGENTS §6.2). Do this as the final step.
+- **Blocker 3:** the log has no `AGREEMENT RECORDED` line (AGENTS §3); it's pending the user's "I agree".
+- **High 1:** the full `bun start` (R04) and a full-restart reset were not executed on the fresh clone because the ports were occupied (MANUAL).
+- **High 2:** `.vscode/launch.json` has no backend entrypoint configuration (S19) and says "Postman Clone".
+- **High 3:** README gaps. No `bun test`, external shields.io badges, a feature list missing later work, a tree missing `shared/components`/`.vscode`, and no architecture/decisions pointer.
+- **Medium:** stale "Postman Clone" in `setup.sh` output; the axios justification isn't visible in the README.
+- **Low:**
+  - The root `.env.example` is empty.
+  - The `origin` remote still uses the old repository name.
+  - A demo `JWT_SECRET` default ships in `backend/.env.example`.
+  - The browser logs the deliberate wrong-password 401 to the console (inherent).
+
+**Passed:** everything else. Clean install (exit 0, 4s) with seed counts matching the README; build; 79/79 tests; health reports the DB; auth, reads, the full create/update/read/delete cycle, errors and ownership (404); start-time reseed; no secrets or `.env` in history; `.env` files ignored; archive 1.32 MB with the correct export rules; Prettier-clean source; no frontend console logging; American English; offline-safe seed data; the reviewer click-through (login, seeded collections, send, environments, history, snippets, save, second account, 400px).
