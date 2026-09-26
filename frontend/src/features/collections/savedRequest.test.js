@@ -8,7 +8,10 @@ import {
 	addSavedRequest,
 	nextCopyName,
 	buildDuplicatePayload,
-	insertSavedRequestInOrder,
+	insertSavedRequestAfter,
+	normalizeRequestName,
+	hasNameConflict,
+	duplicateNameMessage,
 } from "./savedRequest.js";
 
 const saved = {
@@ -85,6 +88,7 @@ describe("collection list helpers", () => {
 		expect(collections[0].requests[0].name).toBe("Users");
 		expect(removeSavedRequest(collections, "r1")[0].requests.map((r) => r._id)).toEqual(["r2"]);
 		expect(addSavedRequest(collections, "c2", { _id: "r3" })[1].requests).toEqual([{ _id: "r3" }]);
+		expect(addSavedRequest(collections, "c1", { _id: "r0" })[0].requests.map((r) => r._id)).toEqual(["r0", "r1", "r2"]);
 		expect(collections[1].requests).toEqual([]);
 	});
 });
@@ -149,20 +153,45 @@ describe("buildDuplicatePayload", () => {
 	});
 });
 
-describe("insertSavedRequestInOrder", () => {
-	test("places a new request where the server's sort (sortOrder asc, newest first) would", () => {
+describe("insertSavedRequestAfter", () => {
+	test("places the clone directly after the original, leaving the others in order", () => {
 		const collections = [
-			{
-				_id: "c1",
-				requests: [
-					{ _id: "a", sortOrder: 0, createdAt: "2026-09-26T10:00:00Z" },
-					{ _id: "b", sortOrder: 1, createdAt: "2026-09-20T00:00:00Z" },
-					{ _id: "c", sortOrder: 2, createdAt: "2026-09-20T00:00:00Z" },
-				],
-			},
+			{ _id: "c1", requests: [{ _id: "a" }, { _id: "b" }, { _id: "c" }] },
+			{ _id: "c2", requests: [{ _id: "z" }] },
 		];
-		const created = { _id: "new", sortOrder: 0, createdAt: "2026-09-26T12:00:00Z" };
-		expect(insertSavedRequestInOrder(collections, "c1", created)[0].requests.map((r) => r._id)).toEqual(["new", "a", "b", "c"]);
+		const next = insertSavedRequestAfter(collections, "c1", "b", { _id: "b-copy" });
+		expect(next[0].requests.map((r) => r._id)).toEqual(["a", "b", "b-copy", "c"]);
+		expect(next[1]).toBe(collections[1]);
 		expect(collections[0].requests).toHaveLength(3);
+		expect(insertSavedRequestAfter(collections, "c1", "c", { _id: "c-copy" })[0].requests.map((r) => r._id)).toEqual([
+			"a",
+			"b",
+			"c",
+			"c-copy",
+		]);
+	});
+});
+
+describe("request name uniqueness (mirrors the server)", () => {
+	const requests = [
+		{ _id: "a", name: "Get Users" },
+		{ _id: "b", name: "Get Posts" },
+	];
+	test("trimmed, case-insensitive comparison", () => {
+		expect(normalizeRequestName("  Get USERS ")).toBe("get users");
+		expect(hasNameConflict(requests, "get users ", "b")).toBe(true);
+		expect(hasNameConflict(requests, "Get Comments", "b")).toBe(false);
+	});
+	test("a request never conflicts with itself (keeping or re-casing its own name)", () => {
+		expect(hasNameConflict(requests, "Get Users", "a")).toBe(false);
+		expect(hasNameConflict(requests, "GET USERS", "a")).toBe(false);
+		expect(hasNameConflict(requests, "Get Users", undefined)).toBe(true);
+	});
+	test("message matches the server's 409 text", () => {
+		expect(duplicateNameMessage(" Get Users ")).toBe('A request named "Get Users" already exists in this collection.');
+	});
+	test("clone names skip case/whitespace variants of taken names", () => {
+		expect(nextCopyName("Target", ["Target", "target copy "])).toBe("Target Copy 2");
+		expect(nextCopyName("Target", ["Target", "TARGET COPY", "target copy 2"])).toBe("Target Copy 3");
 	});
 });

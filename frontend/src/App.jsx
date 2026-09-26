@@ -19,7 +19,7 @@ import {
 	addSavedRequest,
 	buildDuplicatePayload,
 	findSavedRequest,
-	insertSavedRequestInOrder,
+	insertSavedRequestAfter,
 	nextCopyName,
 	isSavedRequestDirty,
 	removeSavedRequest,
@@ -92,6 +92,8 @@ export function PostmanWorkspace({ account, onLogout }) {
 	const [showSave, setShowSave] = useState(false);
 	const [confirmDialog, setConfirmDialog] = useState(null);
 	const [savingRequest, setSavingRequest] = useState(false);
+	// A just-created clone whose name should open in inline rename.
+	const [renameAfterCloneId, setRenameAfterCloneId] = useState(null);
 	const { toasts, notify, dismiss } = useToasts();
 	// Saved requests with a duplicate in flight — a second request for the same
 	// one is ignored, so a double click can't create two copies.
@@ -254,6 +256,8 @@ export function PostmanWorkspace({ account, onLogout }) {
 			notify("success", `Renamed to “${updated.name}”`);
 			return true;
 		} catch (e) {
+			// A duplicate name is shown under the field (the form stays open).
+			if (e.code === "DUPLICATE_NAME") return { error: e.message };
 			notify("error", `Couldn’t rename “${req.name}”: ${e.message}`);
 			return false;
 		}
@@ -271,9 +275,13 @@ export function PostmanWorkspace({ account, onLogout }) {
 				req.name,
 				(collection.requests || []).map((r) => r.name),
 			);
-			const created = await collectionApi.createRequest(collection._id, buildDuplicatePayload(req, name));
-			setCollections((prev) => insertSavedRequestInOrder(prev, collection._id, created));
+			const created = await collectionApi.createRequest(collection._id, {
+				...buildDuplicatePayload(req, name),
+				afterRequestId: req._id,
+			});
+			setCollections((prev) => insertSavedRequestAfter(prev, collection._id, req._id, created));
 			handleSelectRequest(created);
+			setRenameAfterCloneId(created._id);
 			notify("success", `Cloned as “${created.name}”`);
 		} catch (e) {
 			notify("error", `Couldn’t clone “${req.name}”: ${e.message}`);
@@ -562,6 +570,8 @@ export function PostmanWorkspace({ account, onLogout }) {
 				onDeleteCollection={handleDeleteCollection}
 				onRenameRequest={handleRenameRequest}
 				onDuplicateRequest={handleDuplicateRequest}
+				autoRenameRequestId={renameAfterCloneId}
+				onAutoRenameStarted={() => setRenameAfterCloneId(null)}
 				onCopyRequestUrl={handleCopyRequestUrl}
 				onDeleteRequest={handleDeleteRequest}
 				onClearHistory={handleClearHistory}

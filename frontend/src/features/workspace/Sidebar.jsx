@@ -1,6 +1,7 @@
-import { useState, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { statusClass } from "../../shared/utils/format.js";
 import { ActionMenu } from "../../shared/components/ActionMenu.jsx";
+import { duplicateNameMessage, hasNameConflict } from "../collections/savedRequest.js";
 import { CloneIcon, ClipboardIcon, PencilIcon, TrashIcon } from "../../shared/components/icons.jsx";
 
 // A ⋯ button that opens an ActionMenu (same look for collections and saved
@@ -35,64 +36,120 @@ function MenuButton({ className, label, items }) {
 	);
 }
 
-// Inline rename form, used for saved requests. `onSubmit(name)` resolves to
-// true on success; on failure the form stays open so the name isn't lost.
-function InlineRename({ initial, onSubmit, onCancel, label }) {
+// Inline rename form for collections and saved requests. `onSubmit(name)`
+// resolves to true on success, `{ error }` for a message to show under the
+// field (e.g. the server's 409 for a duplicate name), or false; on anything
+// but success the form stays open with the text. The text is selected on
+// focus so typing replaces it. `validate(name)` returns an error message for
+// instant feedback as the user types (✓ is disabled while it does).
+//
+// keepOnDismiss (used right after Clone): Enter with an empty or unchanged
+// name, Esc, and a click outside all simply close the form, keeping the
+// current name — the clone already exists under it.
+function InlineRename({ initial, onSubmit, onCancel, label, validate, keepOnDismiss = false }) {
 	const [value, setValue] = useState(initial);
 	const [pending, setPending] = useState(false);
+	const [serverError, setServerError] = useState("");
+	const formRef = useRef(null);
+	const inputRef = useRef(null);
+	const errorId = useId();
 	const name = value.trim();
-	// Nothing to save when the name is empty or unchanged; Enter then does nothing.
-	const canSubmit = !pending && name.length > 0 && name !== initial;
+	const changed = name.length > 0 && name !== initial;
+	const error = serverError || (changed && validate ? validate(name) : null) || "";
+	const canSubmit = !pending && changed && !error;
+
+	useEffect(() => {
+		formRef.current?.scrollIntoView({ block: "nearest" });
+	}, []);
+
+	// The input is disabled while saving, which drops its focus; after a
+	// rejected name, put the caret back at the end so the user can fix it.
+	useEffect(() => {
+		if (pending || !serverError || !inputRef.current) return;
+		const input = inputRef.current;
+		input.focus();
+		input.setSelectionRange(input.value.length, input.value.length);
+	}, [pending, serverError]);
+
+	useEffect(() => {
+		if (!keepOnDismiss) return undefined;
+		function onPointerDown(e) {
+			if (!pending && formRef.current && !formRef.current.contains(e.target)) onCancel();
+		}
+		document.addEventListener("mousedown", onPointerDown);
+		return () => document.removeEventListener("mousedown", onPointerDown);
+	}, [keepOnDismiss, pending, onCancel]);
+
 	async function handleSubmit(e) {
 		e.preventDefault();
 		if (!canSubmit) return;
 		setPending(true);
-		const ok = await onSubmit(name);
+		const result = await onSubmit(name);
 		setPending(false);
-		if (ok) onCancel();
+		if (result === true) onCancel();
+		else if (result?.error) setServerError(result.error);
 	}
 	return (
-		<form
-			className="inline-form"
-			onSubmit={handleSubmit}
-			onKeyDown={(e) => {
-				if (e.key === "Escape" && !pending) {
-					e.preventDefault();
-					e.stopPropagation();
-					onCancel();
-				}
-			}}
-		>
-			<input
-				className="inline-input"
-				value={value}
-				onChange={(e) => setValue(e.target.value)}
-				onFocus={(e) => e.target.select()}
-				autoFocus
-				disabled={pending}
-				aria-label={label}
-			/>
-			<button
-				className={`inline-btn inline-btn-ok${pending ? " is-saving" : ""}`}
-				type="submit"
-				disabled={!canSubmit}
-				aria-label={pending ? "Saving name" : "Save name"}
-				aria-busy={pending}
-				title={pending ? "Saving…" : "Save name (Enter)"}
+		<div className="inline-rename" ref={formRef}>
+			<form
+				className="inline-form"
+				onSubmit={handleSubmit}
+				onKeyDown={(e) => {
+					if (e.key === "Escape" && !pending) {
+						e.preventDefault();
+						e.stopPropagation();
+						onCancel();
+					} else if (e.key === "Enter" && keepOnDismiss && !pending && !changed) {
+						// The browser won't submit a form whose only submit button is
+						// disabled, so an empty or unchanged name is handled here: keep it.
+						// (A duplicate name stays open with its error instead.)
+						e.preventDefault();
+						onCancel();
+					}
+				}}
 			>
-				{pending ? <span className="inline-btn-spinner" aria-hidden="true" /> : "✓"}
-			</button>
-			<button
-				className="inline-btn inline-btn-cancel"
-				type="button"
-				onClick={onCancel}
-				disabled={pending}
-				aria-label="Cancel rename"
-				title="Cancel (Esc)"
-			>
-				✕
-			</button>
-		</form>
+				<input
+					ref={inputRef}
+					className="inline-input"
+					value={value}
+					onChange={(e) => {
+						setValue(e.target.value);
+						setServerError("");
+					}}
+					onFocus={(e) => e.target.select()}
+					autoFocus
+					disabled={pending}
+					aria-label={label}
+					aria-invalid={Boolean(error)}
+					aria-describedby={error ? errorId : undefined}
+				/>
+				<button
+					className={`inline-btn inline-btn-ok${pending ? " is-saving" : ""}`}
+					type="submit"
+					disabled={!canSubmit}
+					aria-label={pending ? "Saving name" : "Save name"}
+					aria-busy={pending}
+					title={pending ? "Saving…" : "Save name (Enter)"}
+				>
+					{pending ? <span className="inline-btn-spinner" aria-hidden="true" /> : "✓"}
+				</button>
+				<button
+					className="inline-btn inline-btn-cancel"
+					type="button"
+					onClick={onCancel}
+					disabled={pending}
+					aria-label="Cancel rename"
+					title="Cancel (Esc)"
+				>
+					✕
+				</button>
+			</form>
+			{error && (
+				<p id={errorId} className="field-error" role="alert">
+					{error}
+				</p>
+			)}
+		</div>
 	);
 }
 
@@ -108,9 +165,24 @@ function CollectionItem({
 	onDuplicateRequest,
 	onCopyRequestUrl,
 	onDeleteRequest,
+	autoRenameRequestId,
+	onAutoRenameStarted,
 }) {
 	const [open, setOpen] = useState(defaultOpen);
 	const [renamingRequestId, setRenamingRequestId] = useState(null);
+	// Rename opened automatically right after a clone (different dismiss rules).
+	const [renameIsAfterClone, setRenameIsAfterClone] = useState(false);
+	const requestIds = (collection.requests || []).map((r) => r._id).join(",");
+
+	// A clone just landed in this collection: expand it and open the clone's
+	// name for renaming.
+	useEffect(() => {
+		if (!autoRenameRequestId || !requestIds.split(",").includes(autoRenameRequestId)) return;
+		setOpen(true);
+		setRenamingRequestId(autoRenameRequestId);
+		setRenameIsAfterClone(true);
+		onAutoRenameStarted();
+	}, [autoRenameRequestId, requestIds, onAutoRenameStarted]);
 	const requests = collection.requests || [];
 
 	return (
@@ -163,8 +235,13 @@ function CollectionItem({
 									key={req._id}
 									initial={req.name}
 									label={`Rename ${req.name}`}
+									keepOnDismiss={renameIsAfterClone}
+									validate={(name) => (hasNameConflict(requests, name, req._id) ? duplicateNameMessage(name) : null)}
 									onSubmit={(name) => onRenameRequest(req, name)}
-									onCancel={() => setRenamingRequestId(null)}
+									onCancel={() => {
+										setRenamingRequestId(null);
+										setRenameIsAfterClone(false);
+									}}
 								/>
 							) : (
 								<div key={req._id} className={`request-row ${activeRequestId === req._id ? "active" : ""}`}>
@@ -203,7 +280,10 @@ function CollectionItem({
 													id: "rename",
 													label: "Rename",
 													icon: <PencilIcon />,
-													onSelect: () => setRenamingRequestId(req._id),
+													onSelect: () => {
+														setRenameIsAfterClone(false);
+														setRenamingRequestId(req._id);
+													},
 												},
 												{ divider: true },
 												{
@@ -242,6 +322,8 @@ export function Sidebar({
 	onDuplicateRequest,
 	onCopyRequestUrl,
 	onDeleteRequest,
+	autoRenameRequestId,
+	onAutoRenameStarted,
 	onClearHistory,
 	onSelectHistory,
 	onDeleteHistoryEntry,
@@ -352,6 +434,8 @@ export function Sidebar({
 										onRenameRequest={onRenameRequest}
 										onDuplicateRequest={onDuplicateRequest}
 										onCopyRequestUrl={onCopyRequestUrl}
+										autoRenameRequestId={autoRenameRequestId}
+										onAutoRenameStarted={onAutoRenameStarted}
 										onDeleteRequest={onDeleteRequest}
 									/>
 								),

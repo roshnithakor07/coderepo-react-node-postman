@@ -14,6 +14,7 @@ process.env.JWT_EXPIRES_IN = "1h";
 const { initConfig } = await import("./shared/config/index.js");
 const { createApp } = await import("./app.js");
 const { WorkspaceAccount } = await import("./features/auth/workspace-account.model.js");
+const { SavedRequest } = await import("./features/collections/collection.model.js");
 
 let server;
 let baseUrl;
@@ -340,6 +341,100 @@ describe("saved request update, rename and delete; history entry delete (live HT
 		expect(response.status).toBe(404);
 		const all = (await (await authed("/collections")).json()).data.flatMap((c) => c.requests);
 		expect(all.some((r) => r.name === "Orphan Copy")).toBe(false);
+	});
+
+	test("afterRequestId places the new request directly after the original; the rest keep their order", async () => {
+		const collection = await newCollection("Clone position");
+		const create = async (body) => (await (await authed(`/collections/${collection._id}/requests`, json("POST", body))).json()).data;
+		const a = await create({ name: "A" });
+		const b = await create({ name: "B" });
+		const c = await create({ name: "C" });
+		const names = async () => (await requestsIn(collection._id)).map((r) => r.name);
+		expect(await names()).toEqual(["C", "B", "A"]); // all sortOrder 0 → newest first
+		const clone = await create({ name: "B Copy", afterRequestId: b._id });
+		expect(clone.name).toBe("B Copy");
+		expect(await names()).toEqual(["C", "B", "B Copy", "A"]);
+		await create({ name: "A Copy", afterRequestId: a._id }); // after the last one → at the end
+		expect(await names()).toEqual(["C", "B", "B Copy", "A", "A Copy"]);
+		await create({ name: "C Copy", afterRequestId: c._id });
+		expect(await names()).toEqual(["C", "C Copy", "B", "B Copy", "A", "A Copy"]);
+	});
+
+	test("afterRequestId from another collection is rejected and nothing is created", async () => {
+		const first = await newCollection("Position source");
+		const second = await newCollection("Position target");
+		const foreign = (await (await authed(`/collections/${first._id}/requests`, json("POST", { name: "Elsewhere" }))).json()).data;
+		const response = await authed(
+			`/collections/${second._id}/requests`,
+			json("POST", { name: "Misplaced", afterRequestId: foreign._id }),
+		);
+		expect(response.status).toBe(400);
+		expect((await response.json()).error.code).toBe("INVALID_POSITION");
+		expect(await requestsIn(second._id)).toHaveLength(0);
+		expect((await requestsIn(first._id)).map((r) => r.name)).toEqual(["Elsewhere"]);
+		// malformed ids are a validation error; updates can't set a position at all
+		expect((await authed(`/collections/${second._id}/requests`, json("POST", { name: "Bad", afterRequestId: "nope" }))).status).toBe(
+			400,
+		);
+		expect((await authed(`/requests/${foreign._id}`, json("PUT", { afterRequestId: foreign._id }))).status).toBe(400);
+	});
+
+	test("request names are unique per collection: duplicates on create, rename and clone get 409", async () => {
+		const collection = await newCollection("Unique names");
+		const create = (body) => authed(`/collections/${collection._id}/requests`, json("POST", body));
+		const users = (await (await create({ name: "Get Users" })).json()).data;
+		const other = (await (await create({ name: "Get Posts" })).json()).data;
+
+		const dup = await create({ name: "Get Users" });
+		expect(dup.status).toBe(409);
+		expect(await dup.json()).toEqual({
+			error: { code: "DUPLICATE_NAME", message: 'A request named "Get Users" already exists in this collection.' },
+		});
+		// trimmed + case-insensitive
+		for (const variant of ["get users ", "  GET USERS", "Get users"]) expect((await create({ name: variant })).status).toBe(409);
+		// rename into an existing name
+		const rename = await authed(`/requests/${other._id}`, json("PUT", { name: " get USERS " }));
+		expect(rename.status).toBe(409);
+		expect((await rename.json()).error.message).toBe('A request named "get USERS" already exists in this collection.');
+		// clone (create with a position) into an existing name
+		expect((await create({ name: "Get Users", afterRequestId: users._id })).status).toBe(409);
+		// nothing extra was created or renamed
+		expect((await requestsIn(collection._id)).map((r) => r.name).sort()).toEqual(["Get Posts", "Get Users"]);
+	});
+
+	test("a name may repeat across collections; a request may keep (or re-case) its own name", async () => {
+		const first = await newCollection("Names A");
+		const second = await newCollection("Names B");
+		const a = (await (await authed(`/collections/${first._id}/requests`, json("POST", { name: "Shared name" }))).json()).data;
+		expect((await authed(`/collections/${second._id}/requests`, json("POST", { name: "Shared name" }))).status).toBe(201);
+		expect((await authed(`/requests/${a._id}`, json("PUT", { name: "Shared name" }))).status).toBe(200);
+		expect((await authed(`/requests/${a._id}`, json("PUT", { name: "SHARED name", url: "http://localhost/x" }))).status).toBe(200);
+		// updating other fields without a name never trips the check
+		expect((await authed(`/requests/${a._id}`, json("PUT", { url: "http://localhost/y" }))).status).toBe(200);
+	});
+
+	test("two simultaneous creates with the same name: exactly one succeeds (unique index)", async () => {
+		await SavedRequest.init(); // make sure the unique index exists before racing
+		const collection = await newCollection("Race");
+		const [r1, r2] = await Promise.all(
+			[1, 2].map(() => authed(`/collections/${collection._id}/requests`, json("POST", { name: "Racer" }))),
+		);
+		expect([r1.status, r2.status].sort()).toEqual([201, 409]);
+		expect((await requestsIn(collection._id)).map((r) => r.name)).toEqual(["Racer"]);
+	});
+
+	test("the unique index itself rejects a duplicate that bypasses the service check", async () => {
+		await SavedRequest.init();
+		const collection = await newCollection("Index guard");
+		const account = await WorkspaceAccount.findOne({ email: "test.user@example.com" });
+		await SavedRequest.create({ collectionId: collection._id, accountId: account._id, name: "Direct" });
+		let error;
+		try {
+			await SavedRequest.create({ collectionId: collection._id, accountId: account._id, name: "  DIRECT " });
+		} catch (e) {
+			error = e;
+		}
+		expect(error?.code).toBe(11000);
 	});
 
 	test("the removed per-collection request listing route no longer exists", async () => {

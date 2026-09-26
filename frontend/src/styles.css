@@ -2779,6 +2779,24 @@ mark.search-match-current {
 	background: var(--bg-hover);
 }
 
+/* Inline field errors (duplicate request names, …) */
+.inline-rename {
+	width: 100%;
+}
+.field-error {
+	margin: 2px 6px 6px;
+	color: var(--danger);
+	font-size: 11px;
+	line-height: 1.4;
+}
+.save-field .field-error {
+	margin: 6px 0 0;
+}
+.inline-input[aria-invalid="true"],
+.save-input[aria-invalid="true"] {
+	border-color: var(--danger);
+}
+
 /* ─── Action menu (⋯ menus on collections and saved requests) ─── */
 /* Rendered into <body> with fixed positioning, so neither the sidebar's
    scroll area nor the next collection can clip or cover it. */

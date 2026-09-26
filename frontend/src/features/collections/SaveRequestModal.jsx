@@ -1,10 +1,16 @@
 import { useState, useEffect } from "react";
+import { duplicateNameMessage, hasNameConflict } from "./savedRequest.js";
 
 export function SaveRequestModal({ request, collections, onClose, onSave }) {
 	const [name, setName] = useState(request?.name || `${request?.method || "GET"} ${request?.url || ""}`.slice(0, 80).trim());
 	const [collectionId, setCollectionId] = useState(collections[0]?._id || "");
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState("");
+	// A duplicate name, shown under the name field: checked as the user types
+	// (and when the collection changes), or reported by the server (409).
+	const [serverNameError, setServerNameError] = useState("");
+	const targetRequests = collections.find((c) => c._id === collectionId)?.requests || [];
+	const nameError = serverNameError || (name.trim() && hasNameConflict(targetRequests, name) ? duplicateNameMessage(name) : "");
 
 	useEffect(() => {
 		const handler = (e) => {
@@ -22,7 +28,8 @@ export function SaveRequestModal({ request, collections, onClose, onSave }) {
 			await onSave(collectionId, { ...request, name: name.trim() });
 			onClose();
 		} catch (e) {
-			setError(e.message);
+			if (e.code === "DUPLICATE_NAME") setServerNameError(e.message);
+			else setError(e.message);
 		} finally {
 			setSaving(false);
 		}
@@ -49,10 +56,20 @@ export function SaveRequestModal({ request, collections, onClose, onSave }) {
 							id="req-name"
 							className="save-input"
 							value={name}
-							onChange={(e) => setName(e.target.value)}
+							onChange={(e) => {
+								setName(e.target.value);
+								setServerNameError("");
+							}}
 							placeholder="My request"
 							autoFocus
+							aria-invalid={Boolean(nameError)}
+							aria-describedby={nameError ? "req-name-error" : undefined}
 						/>
+						{nameError && (
+							<p id="req-name-error" className="field-error" role="alert">
+								{nameError}
+							</p>
+						)}
 					</div>
 					<div className="save-field">
 						<label htmlFor="col-sel">Collection</label>
@@ -63,7 +80,10 @@ export function SaveRequestModal({ request, collections, onClose, onSave }) {
 								id="col-sel"
 								className="save-select"
 								value={collectionId}
-								onChange={(e) => setCollectionId(e.target.value)}
+								onChange={(e) => {
+									setCollectionId(e.target.value);
+									setServerNameError("");
+								}}
 							>
 								{collections.map((c) => (
 									<option key={c._id} value={c._id}>
@@ -78,7 +98,11 @@ export function SaveRequestModal({ request, collections, onClose, onSave }) {
 					<button className="btn-ghost" onClick={onClose}>
 						Cancel
 					</button>
-					<button className="btn-primary" onClick={handleSave} disabled={saving || !collectionId || !name.trim()}>
+					<button
+						className="btn-primary"
+						onClick={handleSave}
+						disabled={saving || !collectionId || !name.trim() || Boolean(nameError)}
+					>
 						{saving ? "Saving…" : "Save to collection"}
 					</button>
 				</div>

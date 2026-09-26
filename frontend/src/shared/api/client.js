@@ -28,7 +28,12 @@ export async function request(path, options = {}) {
 			setSessionToken("");
 			window.dispatchEvent(new CustomEvent("postman-session-expired", { detail: message }));
 		}
-		throw new Error(message);
+		const error = new Error(message);
+		// Callers that need to react to a specific failure (e.g. a 409
+		// DUPLICATE_NAME) can read these; everything else keeps using .message.
+		error.status = response.status;
+		error.code = code;
+		throw error;
 	}
 	if (!payload || !("data" in payload)) throw new Error("Service returned an invalid response.");
 	return payload.data;

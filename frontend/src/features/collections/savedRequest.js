@@ -51,18 +51,39 @@ export function removeSavedRequest(collections, id) {
 	return (collections || []).map((c) => ({ ...c, requests: (c.requests || []).filter((r) => r._id !== id) }));
 }
 
+// A newly created request (default sortOrder 0, newest) is listed first by
+// the server, so it goes first here too.
 export function addSavedRequest(collections, collectionId, created) {
-	return (collections || []).map((c) => (c._id === collectionId ? { ...c, requests: [...(c.requests || []), created] } : c));
+	return (collections || []).map((c) => (c._id === collectionId ? { ...c, requests: [created, ...(c.requests || [])] } : c));
+}
+
+// Mirrors the server: request names are unique per collection, compared
+// trimmed and case-insensitive.
+export function normalizeRequestName(name) {
+	return String(name ?? "")
+		.trim()
+		.toLowerCase();
+}
+
+// The server's exact 409 message, so instant and server-side errors read the same.
+export function duplicateNameMessage(name) {
+	return `A request named "${String(name).trim()}" already exists in this collection.`;
+}
+
+// True if another request in `requests` (not `exceptId`) already has this name.
+export function hasNameConflict(requests, name, exceptId) {
+	const key = normalizeRequestName(name);
+	return (requests || []).some((r) => r._id !== exceptId && normalizeRequestName(r.name) === key);
 }
 
 // "<name> Copy", or "<name> Copy 2", "Copy 3"… — the first one not already
-// used by another request in the same collection.
+// used by another request in the same collection (compared like the server).
 export function nextCopyName(name, existingNames) {
-	const taken = new Set(existingNames || []);
+	const taken = new Set((existingNames || []).map(normalizeRequestName));
 	const base = `${name} Copy`;
-	if (!taken.has(base)) return base;
+	if (!taken.has(normalizeRequestName(base))) return base;
 	let n = 2;
-	while (taken.has(`${base} ${n}`)) n += 1;
+	while (taken.has(normalizeRequestName(`${base} ${n}`))) n += 1;
 	return `${base} ${n}`;
 }
 
@@ -84,17 +105,14 @@ export function buildDuplicatePayload(saved, name) {
 	};
 }
 
-// The server lists a collection's requests by sortOrder (ascending), then
-// newest first. Inserting with the same rule keeps the sidebar identical to
-// what a reload would show, without refetching every collection.
-function compareSavedRequests(a, b) {
-	const order = (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
-	if (order !== 0) return order;
-	return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
-}
-
-export function insertSavedRequestInOrder(collections, collectionId, created) {
-	return (collections || []).map((c) =>
-		c._id === collectionId ? { ...c, requests: [...(c.requests || []), created].sort(compareSavedRequests) } : c,
-	);
+// A clone created with afterRequestId: the server places it directly after
+// the original (renumbering the collection), so it goes there here too.
+export function insertSavedRequestAfter(collections, collectionId, afterId, created) {
+	return (collections || []).map((c) => {
+		if (c._id !== collectionId) return c;
+		const requests = [...(c.requests || [])];
+		const index = requests.findIndex((r) => r._id === afterId);
+		requests.splice(index === -1 ? requests.length : index + 1, 0, created);
+		return { ...c, requests };
+	});
 }

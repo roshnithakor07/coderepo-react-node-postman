@@ -40,6 +40,15 @@ const requestSchema = z
 	})
 	.strict();
 
+// Create only: an optional position — the new request goes directly after
+// this request of the same collection (used by Clone). Not part of the
+// update schema, and sortOrder itself is never client-settable.
+const requestCreateSchema = requestSchema.extend({
+	afterRequestId: z
+		.string()
+		.regex(/^[a-f0-9]{24}$/i, "afterRequestId must be a saved request id.")
+		.optional(),
+});
 const collectionUpdateSchema = updateSchemaFrom(collectionSchema);
 const requestUpdateSchema = updateSchemaFrom(requestSchema);
 
@@ -80,7 +89,7 @@ export async function deleteCollection(request, response, next) {
 
 export async function createRequest(request, response, next) {
 	try {
-		const data = requestSchema.parse(request.body);
+		const data = requestCreateSchema.parse(request.body);
 		response.status(201).json({ data: await collectionService.createRequest(request.params.id, request.account._id, data) });
 	} catch (error) {
 		next(error);
