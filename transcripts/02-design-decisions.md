@@ -213,3 +213,4 @@ Branch `feature/response-viewer-polish` added four things to the Pretty tab: JSO
 - **Axios stays, with its role stated in the README:** the proxy relies on its status-agnostic responses, timeout, decompression and query serialization. It has been part of the approved stack since the initial commit (the user's 2026-09-22 decision to keep it).
 - **Two debug configs** (full app, backend only), both the same `node` + `bun` pattern, so the backend can be debugged without the frontend dev server.
 - **No root `.env.example`:** the audit item assumed an empty file that doesn't exist; configuration lives in `backend/.env` and `frontend/.env`.
+- **Status:** Merged into `main` (merge commit `2906a8c`, 2026-09-26). L1 skipped by the user's decision.

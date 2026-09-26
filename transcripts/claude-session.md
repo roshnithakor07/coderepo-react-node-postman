@@ -4268,3 +4268,7 @@ Then rerun the full validator.
   - **R11** the reseed removes a probe;
   - **R12** disposable DB dropped, port freed, the user's dev servers untouched;
   - **R04** (the exact `bun start` on 3000/8000) is **MANUAL until H1**, which the user scheduled after both merges.
+
+### Update — approved and merged
+
+**Status:** Merged — approved 2026-09-26, merged into `main` with `--no-ff` (merge commit `2906a8c`); the merged `main` builds and passes 117/117 tests. `chore/submission-docs` deleted locally and on `origin`; `chore/submission-audit` (already fully contained in `main`) deleted too, at the user's request. L1 skipped by the user's decision: no root `.env.example`.
