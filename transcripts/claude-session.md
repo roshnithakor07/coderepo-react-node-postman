@@ -3925,3 +3925,7 @@ The default pane on load (229px) is above the first threshold.
   - **Bulk edit:** checked at 120, 140, 160, 180, 220, 260, 300 and 450px panes against the thresholds above.
   - **Console:** no errors or warnings.
 - `clicktest-kv.cjs` (updated for no default rows and the new limits): 23/23, with its saved test request deleted.
+
+### Update — approved and merged
+
+**Status:** Merged — approved 2026-09-26, merged into `main` with `--no-ff` (merge commit `73a68d3`); the merged `main` builds and passes 79/79 tests. `feature/kv-editor-polish` deleted locally and on `origin`. The user asked not to start `feature/form-body-table` yet.
