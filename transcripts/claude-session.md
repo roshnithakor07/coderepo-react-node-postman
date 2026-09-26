@@ -4002,3 +4002,52 @@ Both runs left their test collection behind; it was deleted each time, and clean
 - **Browser click-tests:**
   - new flows 15/15: Save on an unsaved request opens the dialog; loaded context shown; unchanged pane height; unsaved indicator appears, clears on save and on typing the value back; PUT with no POST and no duplicate; Save as new; menu reveal by hover and Tab; rename error (toast, form kept) and success; delete with confirm; history delete failure (restored in place) and success (gone server-side); no unexpected console errors;
   - regressions: KV editor 23/23, split 52/52, reviewer walkthrough 15/15 (updated for the new Save behavior: Save on the loaded seeded request sends a PUT and shows a toast, and "Save as new…" opens the dialog).
+
+### Update — interaction states: inline rename buttons, color choice, full hover/active/focus sweep (not yet approved)
+
+**Request:** (1) the inline rename ✓ has no hover; add hover, active, focus-visible and disabled (empty or unchanged name) states plus a saving state, and the same for ✕. (2) Check whether orange (`--brand`) is right for ✓ under the `--brand` = navigation/active, `--primary` = actions split; make both inline rename forms identical and explain the pick. (3) Sweep every button/clickable for missing hover, active or focus-visible states, list the findings and fix them with existing tokens and timing. (4) Enter confirms and Esc cancels in the rename input.
+
+**Color decision: `--primary` (blue).** ✓ confirms an action (saving a name), and the documented split reserves `--brand` for navigation and the active/selected state, with actions on `--primary` like Send and `.btn-primary`. All three inline forms (new collection, collection rename, request rename) share `.inline-btn-ok`, so they stay identical. States use the existing `--primary-hover` / `--primary-active` / `--primary-disabled` tokens. The timing tokens in this repo are `--t-fast` (100ms) and `--ease`; no `--duration-fast` exists.
+
+**Identical rename forms by construction:** the collection rename now uses the same `InlineRename` component as the saved-request rename instead of separate markup.
+- ✓ is disabled while the name is empty or unchanged.
+- While saving, ✓ shows a spinner with `aria-busy`, and the input and ✕ are locked (Esc is ignored until the request settles).
+- Enter confirms, and Esc cancels (`preventDefault` + `stopPropagation`).
+- The field is selected on focus.
+- A failure keeps the form open.
+- The collection rename also gained success/error toasts; it previously had no error handling at all.
+
+**Sweep findings** (a script listed every clickable element in the JSX and checked the CSS for each state):
+- **Active (pressed):** missing on 36 of 40 kinds of clickable element. Only Sign in, Send and `.btn-primary` had one, and the ✓'s active rule came with this change.
+- **Hover:** missing on the ✓ (`.inline-btn-ok`).
+- **Focus-visible:** `<button>`s all get the global focus rule, but two clickable `<div>`s had no focus style (`.collection-header`, `.env-list-item`).
+- **Keyboard access:** the Environments list item wasn't keyboard-reachable at all (a plain `<div>` with `onClick`). It now has `role="button"`, `tabIndex={0}`, `aria-pressed`, and Enter/Space select it (only when the row itself is focused, so its inner Activate/Delete buttons keep their own behavior).
+
+**Fix:** one pressed-state rule per kind of control, using existing tokens:
+- rows, tabs and list items → `--bg-active`;
+- small icon buttons → `scale(0.94)`;
+- text buttons → `translateY(1px)` (as Send already did);
+- all excluding disabled buttons;
+- plus focus rings for the two `<div>` rows, matching the global button ring.
+
+Re-running the sweep reports no gaps across all 40 kinds.
+
+**Noticed, not changed (a question for the user):** the global `button:focus-visible` ring uses `--brand` (orange), while inputs use `--primary` (blue). Under the split, keyboard focus is interaction, so `--primary` would be more consistent. Left as is because it's outside this request.
+
+**Failed attempts (test harness, not the app):**
+- My first edit script didn't apply because Prettier had reformatted `InlineRename`; I replaced the function by its boundaries instead.
+- A click-test crashed when the delayed-save route was removed before the held request continued ("Route is already handled"). The crash bypassed cleanup and left a test collection, which was deleted.
+- The environment keyboard check first used a script `.focus()` (no `:focus-visible` after mouse use) and then Tab from the page start (the modal comes last in tab order). Real keyboard navigation from inside the modal confirmed it works.
+
+**Verification:**
+- Build, 93/93 tests, Prettier and `git diff --check` pass.
+- States click-test 18/18:
+  - ✓ disabled when unchanged or empty; blue `rgb(47,103,204)`; hover `rgb(37,82,170)`; pressed transform; ✕ hover; keyboard focus ring;
+  - Esc cancels and Enter confirms (toast) for the collection rename;
+  - the request rename ✓ is styled identically;
+  - saving state (spinner, `aria-busy`, everything locked, Esc ignored) and completion;
+  - hover and pressed for ⋯, Save as new…, Bulk edit, history × and toast close;
+  - an environment row reached by Tab with a ring, and Enter selects it;
+  - no console errors.
+- Regressions: new flows 15/15, KV editor 23/23, reviewer walkthrough 15/15.
+- No test data left behind.

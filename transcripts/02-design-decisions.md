@@ -177,3 +177,10 @@ Branch `feature/response-viewer-polish` added four things to the Pretty tab: JSO
 - **Toasts are self-written** (a hook plus a stack), with no dependency (GUIDELINES §2.2).
 - **Partial updates never apply defaults.** `updateSchemaFrom(schema)` derives the update schema from the create schema with defaults stripped, fixing silent data loss on rename (saved requests, collection descriptions) and the Environments modal deactivating the active environment on every save.
 - **Row actions avoid CSS transforms,** because a transform creates a stacking context that traps a dropdown's z-index under later sidebar content.
+
+### Interaction states (branch `fix/review-blockers`, round 2)
+
+- **Inline confirm (✓) is `--primary`, not `--brand`:** it's an action, per the brand/primary split. One shared class keeps the three inline forms identical.
+- **One rename component for collections and saved requests,** so the two forms can't drift apart: disabled when there's nothing to save, a saving state that locks the form, Enter/Esc, and keep-open-on-failure.
+- **Pressed states follow one rule per control kind** with existing tokens (`--bg-active` for rows/tabs, a slight scale for icon buttons, a 1px press for text buttons, as Send already did), instead of per-button one-offs.
+- **Clickable non-button rows get `role="button"`, `tabIndex` and Enter/Space,** plus the same focus ring as buttons. The Environments list was mouse-only before.
