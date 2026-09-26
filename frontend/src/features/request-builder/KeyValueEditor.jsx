@@ -113,7 +113,7 @@ export function KeyValueEditor({ rows, onChange, keyPlaceholder = "Key", valuePl
 	const addFromPlaceholder = useCallback((field, value) => onChange([...rows, { ...EMPTY_ROW, [field]: value }]), [rows, onChange]);
 
 	return (
-		<div className="kv-editor">
+		<div className={`kv-editor${bulkMode ? " kv-editor-bulk" : ""}`}>
 			<div className="kv-toolbar">
 				<button type="button" className="kv-mode-btn" aria-pressed={bulkMode} onClick={() => setBulkMode((on) => !on)}>
 					{bulkMode ? "Key-value edit" : "Bulk edit"}

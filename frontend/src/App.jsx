@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { authApi } from "./features/auth/auth.api.js";
 import { WorkspaceLogin } from "./features/auth/WorkspaceLogin.jsx";
 import { collectionApi } from "./features/collections/collection.api.js";
@@ -15,22 +15,23 @@ import { Sidebar } from "./features/workspace/Sidebar.jsx";
 import { hasSessionToken, setSessionToken } from "./shared/api/client.js";
 import { ConfirmDialog } from "./shared/components/ConfirmDialog.jsx";
 
-// Smallest the request/response panes may get while dragging the splitter:
-// enough for each pane's bar, its tab strip and the first line of content
-// (measured: request bar 59 + tabs 36 + editor toolbar/header ~60 + one
-// row 32; response bar 49 + tabs 36 + JSON toolbar 34 + ~60 of body), so a
-// tab strip is never left sitting over nothing.
-const REQUEST_PANE_MIN_PX = 200;
-const RESPONSE_PANE_MIN_PX = 180;
-const SPLITTER_PX = 10;
+// How far the request/response divider may travel, read from the live
+// layout (both bars can change height, e.g. the request bar wraps on narrow
+// screens): the request pane can't shrink past the bottom of its tab strip,
+// the response pane can't shrink past the bottom of its header bar. Content
+// below either may collapse and scroll.
+function measurePaneMinimums(requestPane, responsePane) {
+	const bottomWithin = (pane, selector) => {
+		const el = pane?.querySelector(selector);
+		return el ? Math.ceil(el.getBoundingClientRect().bottom - pane.getBoundingClientRect().top) : 0;
+	};
+	return { request: bottomWithin(requestPane, ".request-builder > .tabs"), response: bottomWithin(responsePane, ".response-bar") };
+}
 
 const DEFAULT_REQUEST = {
 	method: "GET",
 	url: "",
-	params: [
-		{ key: "", value: "", enabled: false },
-		{ key: "", value: "", enabled: false },
-	],
+	params: [],
 	headers: [],
 	body: "",
 	bodyType: "none",
@@ -78,11 +79,16 @@ export function PostmanWorkspace({ account, onLogout }) {
 	const [showEnvs, setShowEnvs] = useState(false);
 	const [showSave, setShowSave] = useState(false);
 	const [confirmDialog, setConfirmDialog] = useState(null);
-	const [splitterY, setSplitterY] = useState(50);
+	// Request pane height in px; null until the first layout, when it's set to
+	// the pane's natural height (see the layout effect below).
+	const [requestPaneHeight, setRequestPaneHeight] = useState(null);
+	const [paneMinimums, setPaneMinimums] = useState({ request: 0, response: 0 });
 	const [sidebarWidth, setSidebarWidth] = useState(290);
 	const draggingRef = useRef(false);
 	const sidebarDraggingRef = useRef(false);
 	const containerRef = useRef(null);
+	const requestPaneRef = useRef(null);
+	const responsePaneRef = useRef(null);
 	// Bumped by every action that changes what "the current request" means —
 	// selecting a saved/history request, or editing any field. handleSend()
 	// captures this before its await and checks it after: if a slower, earlier
@@ -312,20 +318,41 @@ export function PostmanWorkspace({ account, onLogout }) {
 		setEnvironments((prev) => prev.filter((e) => e._id !== id));
 	}
 
-	// Splitter drag
+	// Default split: on first layout the request pane renders at its natural
+	// height — request bar, tabs, the table header, its one empty row and the
+	// panel's bottom padding — and that height is then fixed in px. Runs
+	// before paint, so no partially cut row is ever shown.
+	useLayoutEffect(() => {
+		if (requestPaneHeight !== null || !requestPaneRef.current) return;
+		setRequestPaneHeight(Math.ceil(requestPaneRef.current.getBoundingClientRect().height));
+		setPaneMinimums(measurePaneMinimums(requestPaneRef.current, responsePaneRef.current));
+	}, [requestPaneHeight]);
+
+	// The bars' heights depend on the window width, so re-read the minimums.
+	useEffect(() => {
+		function onResize() {
+			setPaneMinimums(measurePaneMinimums(requestPaneRef.current, responsePaneRef.current));
+		}
+		window.addEventListener("resize", onResize);
+		return () => window.removeEventListener("resize", onResize);
+	}, []);
+
+	// Splitter drag: the pane follows the pointer's movement from where the
+	// divider was grabbed (no jump on grab), clamped to the measured minimums.
 	function onSplitterMouseDown(e) {
 		e.preventDefault();
+		if (!containerRef.current || !requestPaneRef.current) return;
 		draggingRef.current = true;
+		const minimums = measurePaneMinimums(requestPaneRef.current, responsePaneRef.current);
+		setPaneMinimums(minimums);
+		const startY = e.clientY;
+		const startHeight = requestPaneRef.current.getBoundingClientRect().height;
+		const splitterHeight = e.currentTarget.getBoundingClientRect().height;
 		function onMove(me) {
 			if (!draggingRef.current || !containerRef.current) return;
-			const rect = containerRef.current.getBoundingClientRect();
-			const raw = ((me.clientY - rect.top) / rect.height) * 100;
-			const minPct = (REQUEST_PANE_MIN_PX / rect.height) * 100;
-			const maxPct = 100 - ((RESPONSE_PANE_MIN_PX + SPLITTER_PX) / rect.height) * 100;
-			// A window too short for both minimums keeps them in proportion
-			// instead of letting either pane collapse.
-			const pct = maxPct >= minPct ? Math.min(maxPct, Math.max(minPct, raw)) : (minPct / (minPct + 100 - maxPct)) * 100;
-			setSplitterY(pct);
+			const available = containerRef.current.getBoundingClientRect().height - splitterHeight;
+			const max = Math.max(minimums.request, available - minimums.response);
+			setRequestPaneHeight(Math.min(max, Math.max(minimums.request, startHeight + me.clientY - startY)));
 		}
 		function onUp() {
 			draggingRef.current = false;
@@ -402,7 +429,14 @@ export function PostmanWorkspace({ account, onLogout }) {
 					</div>
 				)}
 				<div className="workspace-panes" ref={containerRef}>
-					<div className="resizable-pane" style={{ flex: `0 1 ${splitterY}%`, minHeight: `min(${REQUEST_PANE_MIN_PX}px, 45%)` }}>
+					<div
+						className="resizable-pane"
+						ref={requestPaneRef}
+						style={{
+							flex: requestPaneHeight === null ? "0 0 auto" : `0 1 ${requestPaneHeight}px`,
+							minHeight: paneMinimums.request,
+						}}
+					>
 						<RequestBuilder
 							request={request}
 							onRequestChange={updateRequest}
@@ -419,10 +453,7 @@ export function PostmanWorkspace({ account, onLogout }) {
 						aria-label="Resize panels"
 						title="Drag to resize"
 					/>
-					<div
-						className="resizable-pane"
-						style={{ flex: `1 1 ${100 - splitterY}%`, minHeight: `min(${RESPONSE_PANE_MIN_PX}px, 45%)` }}
-					>
+					<div className="resizable-pane" ref={responsePaneRef} style={{ flex: "1 1 0", minHeight: paneMinimums.response }}>
 						<ResponseViewer
 							response={response}
 							sending={sending}
