@@ -214,3 +214,9 @@ Branch `feature/response-viewer-polish` added four things to the Pretty tab: JSO
 - **Two debug configs** (full app, backend only), both the same `node` + `bun` pattern, so the backend can be debugged without the frontend dev server.
 - **No root `.env.example`:** the audit item assumed an empty file that doesn't exist; configuration lives in `backend/.env` and `frontend/.env`.
 - **Status:** Merged into `main` (merge commit `2906a8c`, 2026-09-26). L1 skipped by the user's decision.
+
+## Final validation (2026-09-27)
+
+- **No fix branch when nothing fails.** The request was "fix only the failing checks"; with 0 FAIL the smallest change is no change, so only the transcript was committed.
+- **API checks run on a spare port against a disposable DB** instead of stopping the user's dev servers again or writing to the live DB. The exact `bun start` on 3000/8000 (R04, R11) was verified once in H1 on the same commit.
+- **An invalid target URL in `/proxy` returns 200 with `error` in the payload** (the proxy worked; the target failed), like Postman's "Could not send request". Invalid input to the proxy API itself returns 400.

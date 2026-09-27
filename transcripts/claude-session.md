@@ -4272,3 +4272,22 @@ Then rerun the full validator.
 ### Update — approved and merged
 
 **Status:** Merged — approved 2026-09-26, merged into `main` with `--no-ff` (merge commit `2906a8c`); the merged `main` builds and passes 117/117 tests. `chore/submission-docs` deleted locally and on `origin`; `chore/submission-audit` (already fully contained in `main`) deleted too, at the user's request. L1 skipped by the user's decision: no root `.env.example`.
+
+## H1 fresh-clone start and final validator (main @ `cd2858e`, 2026-09-27)
+
+**H1 (the user allowed stopping their dev servers briefly):**
+- Two failed attempts first, recorded honestly:
+  1. `setsid` saved the wrong pid, so the first `bun start` kept running and the restart check read the old instance.
+  2. A cleanup helper matched processes by cwd and killed its own shell; its `bun start` exited, and the script then posted an "H1 reset probe" collection to the user's **live** backend (live collections 4 → 5, other counts unchanged). Deleting it was denied by the permission classifier, so it is left for the user.
+- Clean rerun on a fresh clone with a disposable DB: install exit 0; the exact `bun start` bound :8000 and :3000 from the clone and ran the prestart; a probe collection was created, `bun start` was rerun, and the probe was gone after the reseed (2/4/20/4/5). The disposable DB was dropped, the user's `bun run dev` servers were restored (:3000 Vite and :8000 `bun --watch`, cwd in this repo, both 200), and the clone was removed.
+
+**Final validator (user asked: fix only failing checks on `fix/final-validator`, rerun, merge):**
+- Static S01–S19 on `main` @ `cd2858e`: all PASS.
+  - S06: the only change since 5766e38 is the removal of `@fontsource/roboto`.
+  - S16: Prettier clean.
+  - S18: tar.gz archive 512,965 bytes, GUIDELINES.md and skills/ excluded.
+- Runtime R01–R12: all PASS.
+  - R01, R04 and R11 come from H1.
+  - R02 build and R03 tests (42 backend + 75 frontend) ran on a fresh clone.
+  - R05–R10 ran on the clone's backend on :8010 against a disposable DB, so the user's servers and live DB were not touched.
+- Result: 31 PASS, 0 FAIL, 0 MANUAL. **Nothing to fix, so no `fix/final-validator` branch was created** (an empty branch and merge would only add noise). Only this transcript entry was committed to `main`.
