@@ -220,3 +220,7 @@ Branch `feature/response-viewer-polish` added four things to the Pretty tab: JSO
 - **No fix branch when nothing fails.** The request was "fix only the failing checks"; with 0 FAIL the smallest change is no change, so only the transcript was committed.
 - **API checks run on a spare port against a disposable DB** instead of stopping the user's dev servers again or writing to the live DB. The exact `bun start` on 3000/8000 (R04, R11) was verified once in H1 on the same commit.
 - **An invalid target URL in `/proxy` returns 200 with `error` in the payload** (the proxy worked; the target failed), like Postman's "Could not send request". Invalid input to the proxy API itself returns 400.
+
+## 204 responses read their (empty) body
+
+- `request()` now reads the empty body of a 204 before returning `null`. Otherwise Chrome cancels the unread body and logs a successful delete or logout as `net::ERR_ABORTED`, which looks like a failure in DevTools. It is one line in the shared client, rather than special handling in each caller.

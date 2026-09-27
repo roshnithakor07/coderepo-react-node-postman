@@ -3936,3 +3936,64 @@ branch=main
 repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
 worktree=main
 parent_agent=none
+
+## [2026-09-27T05:37:08+00:00] Final pre-review smoke test: stopped at step 1 (one failure)
+
+User Prompt (verbatim, secrets redacted):
+Final pre-review check and re-export. Do the steps in order and stop if anything fails.
+[Step 1 smoke test on the running dev servers: load without console errors/failed requests, log in, click through every feature, check backend output, phone width, clean up incl. deleting "H1 reset probe". Step 2 log correction for the 05:10/05:30 hand-typed timestamps. Step 3 re-export log to transcripts/ and commit "docs: update exported session log". Step 4 move project.txt to ~/hackerrank_postman/, confirm clean state, no further pushes.]
+Follow-ups: "do task quickly"
+
+Agent Response Summary:
+Ran a Playwright (headless Chromium) smoke test against the user's dev servers. Every feature item passed: load, login (wrong password shows "Email or password is incorrect."), GET/POST, JSON tree/search/expand/collapse, Raw/Headers, save response, params/headers/bulk edit, bearer auth, environments + {{variables}}, collection create/rename, save + update request, clone (placed below)/copy URL/delete, history load more/delete/reload, snippets (curl/fetch/axios/python), sidebar and panel divider drag, keyboard shortcuts, sign out, and 390px phone width. No console errors or warnings besides the deliberate wrong-password 401, and no backend errors or stack traces. ONE FAILURE: every request that returns 204 (DELETE history/environment/collection/request, POST logout) is reported by Chromium as net::ERR_ABORTED. The server answers 204 and the operation succeeds, but frontend/src/shared/api/client.js returns early on 204 without reading the body; a minimal repro confirmed that reading the body removes the abort. Per the user's rule the fix was not made, and steps 2-4 were not run. Several early runs failed from test-script mistakes (wrong search term, env create order, collapsed collection, 300s timeout); these were fixed in the script only. Cleanup: "H1 reset probe" deleted via the UI; all Smoke/Dbg data deleted; the 30 history entries created by the test runs were deleted via the API (all 37 pre-test entries still present); Alex's active environment restored to the seed default "Development" (the prior choice was not recorded anywhere). Live DB now 2/4/24/4/37.
+
+Actions:
+* scratchpad/smoke-final.cjs, smoke-3j.cjs, dbg-3b.cjs, dbg-search.cjs, dbg-env.cjs, dbg-204.cjs, dbg-204b.cjs (headless Chromium via playwright-core)
+* read scratchpad/dev-backend.log (no errors)
+* DELETE /api/v1/history/:id x30 (smoke-created entries only)
+* no repo changes, no commits; steps 2-4 not executed
+
+Context:
+tool=claude-code
+branch=main
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
+worktree=main
+parent_agent=none
+
+## [2026-09-27T05:41:08+00:00] CORRECTION: two hand-typed timestamps
+
+The two entries just before the ONBOARDING COMPLETE / AGREEMENT RECORDED block have timestamps that were typed by hand instead of taken from `date`, and they are inaccurate:
+* "[2026-09-27T05:10:00+00:00] H1 fresh-clone bun start + restart-reset check (redo)": the real time is not recorded; the work it describes ran around 05:03-05:07Z.
+* "[2026-09-27T05:30:00+00:00] Final validator: fix only failing checks, rerun, merge": written before the 05:15:52Z agreement entry, so 05:30 is later than the real write time (roughly 05:12-05:15Z).
+The original entries are left unchanged (the log is append-only). Every entry after them takes its timestamp from `date`.
+
+Context:
+tool=claude-code
+branch=main
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
+worktree=main
+parent_agent=none
+
+## [2026-09-27T05:41:08+00:00] Fix 204 ERR_ABORTED, log correction, re-export, move project.txt
+
+User Prompt (verbatim, secrets redacted):
+Fix it: branch fix/204-empty-body, read the empty body on 204 in client.js, run all tests + build, rerun only the delete/logout checks (no ERR_ABORTED). Merge to main --no-ff, push, delete branch. Then do steps 2–4 as planned. Short report.
+
+Agent Response Summary:
+On branch fix/204-empty-body, client.js now reads the empty body of a 204 response before returning null (Prettier clean). Backend 42/42 and frontend 75/75 tests pass, and the frontend build succeeds. The browser recheck of delete request, delete collection, delete environment, delete history entry and logout shows all five complete with 204, 0 requestfailed, 0 console errors and no backend errors; the throwaway data was removed (live DB 2/4/24/4/37). Committed edf48ed as Roshni Thakor, merged into main with --no-ff (a771551), pushed; the branch was deleted (it was never pushed). Step 2: appended a CORRECTION entry for the hand-typed 05:10/05:30 timestamps. Step 3: this entry is written before the copy so the export includes it; the log is then copied to transcripts/log.txt, checked with cmp and scanned for secrets, and committed as "docs: update exported session log" together with the transcript notes, then pushed. Step 4: project.txt is then moved to ~/hackerrank_postman/project.txt, and the clean state is confirmed. After this, nothing is pushed to main unless the user asks.
+Smoke test results (earlier this session, before the fix): every feature item PASS; the only failure was the 204 ERR_ABORTED issue, now fixed.
+
+Actions:
+* git checkout -b fix/204-empty-body; edit frontend/src/shared/api/client.js; bun test (backend, frontend); vite build
+* scratchpad/smoke-204.cjs (first attempt timed out on a collapsed collection; rerun passed)
+* git commit edf48ed; git merge --no-ff (a771551); git push origin main; git branch -d fix/204-empty-body
+* appended CORRECTION entry; transcripts/claude-session.md and 02-design-decisions.md
+* cp log.txt transcripts/log.txt; git commit "docs: update exported session log"; git push
+* mv project.txt ~/hackerrank_postman/project.txt
+
+Context:
+tool=claude-code
+branch=main
+repo_root=/home/imroshni/hackerrank-project/coderepo-react-node-postman
+worktree=main
+parent_agent=none

@@ -4295,3 +4295,10 @@ Then rerun the full validator.
 ## Agreement recorded (2026-09-27T05:15:52+00:00)
 
 The user replied "I agree". The AGENTS.md §3.4 `ONBOARDING COMPLETE` block (`AGREEMENT RECORDED: /home/imroshni/hackerrank-project/coderepo-react-node-postman`) was appended to the log with the real system time of the reply, `2026-09-27T05:15:52+00:00`. The log had no agreement line before this; it was not backdated.
+
+## Final smoke test and 204 fix (2026-09-27T05:41:08+00:00)
+
+- Browser smoke test (headless Chromium) on the dev servers: every feature passed (load, login, GET/POST, JSON tree/search/expand/collapse, Raw/Headers, save response, params/headers/bulk edit, auth, environments + {{variables}}, collection create/rename/clone/copy/delete, save/update request, history load more/delete/reload, snippets, divider drag, keyboard shortcuts, sign out, 390px). No console errors, no backend errors.
+- **One failure:** every 204 response (deletes, logout) showed up in Chrome as `net::ERR_ABORTED`. The operations succeeded, but `client.js` returned early without reading the empty body. The user chose to fix it: branch `fix/204-empty-body` reads the body; 42 + 75 tests pass and the build succeeds; a recheck shows all five 204 requests completing with no aborts. Merged into `main` with `--no-ff` (`a771551`).
+- Cleanup: the leftover "H1 reset probe" was deleted through the UI, along with all test data and the 30 test-created history entries. Alex's active environment was restored to the seed default (Development). Live DB: 2/4/24/4/37.
+- The log gained a correction entry for two hand-typed timestamps, and was re-exported to `transcripts/log.txt`.
