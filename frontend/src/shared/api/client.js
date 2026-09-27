@@ -18,7 +18,12 @@ export async function request(path, options = {}) {
 			...options.headers,
 		},
 	});
-	if (response.status === 204) return null;
+	if (response.status === 204) {
+		// Read the empty body anyway: an unread body makes Chrome report the
+		// request as net::ERR_ABORTED even though it succeeded.
+		await response.text();
+		return null;
+	}
 	const contentType = response.headers?.get?.("content-type") || "";
 	const payload = contentType.includes("application/json") || !response.headers ? await response.json() : null;
 	if (!response.ok) {
